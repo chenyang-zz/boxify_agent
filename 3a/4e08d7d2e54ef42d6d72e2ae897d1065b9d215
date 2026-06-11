@@ -1,0 +1,94 @@
+app/infrastructure/repositories/db_uow.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 18,56
+tests/test_response_schema.py
+  s_44b7f7a2f18bd5::t_6b836eb0bbcec0 1-11
+app/interfaces/service_dependencies.py
+  s_44b7f7a2f18bd5::t_89b18e0d849f5d 83-91
+  s_44b7f7a2f18bd5::t_729c303286f5af 64,67
+  s_44b7f7a2f18bd5::t_091a501ab8b1df 4,7,10,14,37,65-66,68-82,92-98
+tests/conftest.py
+  s_44b7f7a2f18bd5::t_6b836eb0bbcec0 7,14-16
+.env.example
+  s_44b7f7a2f18bd5::t_091a501ab8b1df 36-41
+core/config.py
+  s_44b7f7a2f18bd5::t_091a501ab8b1df 36,38-41
+  s_44b7f7a2f18bd5::t_d462a7aaaaeaed 37
+app/interfaces/endpoints/auth_routes.py
+  s_44b7f7a2f18bd5::t_89b18e0d849f5d 9-13,57
+  s_44b7f7a2f18bd5::t_091a501ab8b1df 1-8,14-56,58-61
+tests/test_auth_api.py
+  s_44b7f7a2f18bd5::t_3023e06f648ecc 62,65,85
+  s_44b7f7a2f18bd5::t_bdaba75c309151 5,98,108-113
+  s_44b7f7a2f18bd5::t_0c877296f8b6fd 88-96
+  s_44b7f7a2f18bd5::t_2042c230912624 121
+  s_44b7f7a2f18bd5::t_6b836eb0bbcec0 1-4,6-9,15-42,47-60,97,99-107,114-120,122-145
+  s_44b7f7a2f18bd5::t_85f67cdd95ed1b 61,66-84,86-87
+  s_44b7f7a2f18bd5::t_933ab540dda322 10-14,43-46,63-64,146-156
+app/application/security/token.py
+  s_44b7f7a2f18bd5::t_310cc6e772cce6 1-89
+app/interfaces/schemas/base.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 17
+app/infrastructure/repositories/db_user_repository.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 1-41
+tests/test_auth_security.py
+  s_44b7f7a2f18bd5::t_2042c230912624 6-7
+  s_44b7f7a2f18bd5::t_bdaba75c309151 32
+  s_44b7f7a2f18bd5::t_6b836eb0bbcec0 1-5,8-31,33-34,38-66
+  s_44b7f7a2f18bd5::t_03c688e38cc7f3 35-37
+  s_44b7f7a2f18bd5::t_933ab540dda322 67-77
+app/domain/repositories/vow.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 14,22
+app/domain/models/user.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 1-16
+app/infrastructure/models/__init__.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 4,10
+app/interfaces/endpoints/routes.py
+  s_44b7f7a2f18bd5::t_091a501ab8b1df 1,5,16-23
+  s_44b7f7a2f18bd5::t_89b18e0d849f5d 3,12
+alembic/versions/9a5f2d4c7b01_create_users_table.py
+  s_44b7f7a2f18bd5::t_d462a7aaaaeaed 1-49
+app/application/security/__init__.py
+  s_44b7f7a2f18bd5::t_310cc6e772cce6 1-4
+app/application/services/auth_service.py
+  s_44b7f7a2f18bd5::t_729c303286f5af 2,7,15,19,32-44,48-49,66-67
+  s_44b7f7a2f18bd5::t_2042c230912624 5
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 1,3-4,6,8-14,16-18,20-31,45-47,50-65,68-72
+app/interfaces/schemas/auth.py
+  s_44b7f7a2f18bd5::t_091a501ab8b1df 1-26
+app/application/security/password.py
+  s_44b7f7a2f18bd5::t_310cc6e772cce6 1-57
+app/domain/repositories/user_repository.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 1-23
+app/application/errors/exceptions.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 42-55
+app/interfaces/errors/exception_handlers.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 5,60-64,67-71
+  s_44b7f7a2f18bd5::t_28994e65f3f541 2,15-30,65-66,72
+app/infrastructure/models/user.py
+  s_44b7f7a2f18bd5::t_a4df52b3709f7e 1-48
+app/main.py
+  h_e1f1392360ad67 14,61-64
+  s_44b7f7a2f18bd5::t_48a773e46c2b6e 27-29,36-44
+  s_44b7f7a2f18bd5::t_729c303286f5af 65-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3a4e08d7d2e54ef42d6d72e2ae897d1065b9d215",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
