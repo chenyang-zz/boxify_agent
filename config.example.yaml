@@ -1,0 +1,33 @@
+llm_config:
+  base_url: https://api.deepseek.com
+  api_key: ""
+  model_name: deepseek-v4-flash
+  temperature: 0.7
+  max_tokens: 65536
+agent_config:
+  max_iterations: 100
+  max_retries: 3
+  max_search_results: 10
+mcp_config:
+  mcpServers:
+    amap-maps-streamableHTTP:
+      transport: streamable-http
+      enabled: false
+      description: null
+      env: null
+      command: null
+      args: null
+      url: ""
+      headers: null
+    jina-mcp-server:
+      transport: streamable-http
+      enabled: false
+      description: null
+      env: null
+      command: null
+      args: null
+      url: https://mcp.jina.ai/v1
+      headers:
+        Authorization: ""
+a2a_config:
+  a2a_servers: []
