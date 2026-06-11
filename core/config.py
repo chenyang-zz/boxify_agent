@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     cos_bucket: str = ""
     cos_domain: str = ""
 
+    # Auth配置
+    auth_secret_key: str = Field(default="change-me-in-development", repr=False)
+    auth_access_token_expire_minutes: int = 1440
+    admin_username: str = ""
+    admin_password: str = Field(default="", repr=False)
+
     # Sandbox配置
     sandbox_address: Optional[str] = None
     sandbox_image: Optional[str] = None

@@ -11,6 +11,7 @@ from typing import Self
 
 from app.domain.repositories.file_repository import FileRepository
 from app.domain.repositories.session_repository import SessionRepository
+from app.domain.repositories.user_repository import UserRepository
 
 
 class IUnitOfWork(ABC):
@@ -18,6 +19,7 @@ class IUnitOfWork(ABC):
 
     file: FileRepository
     session: SessionRepository
+    user: UserRepository
 
     @abstractmethod
     async def commit(self):

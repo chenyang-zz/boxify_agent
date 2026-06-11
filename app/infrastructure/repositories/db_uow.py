@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.domain.repositories.vow import IUnitOfWork
 from app.infrastructure.repositories.db_file_repository import DBFileRepository
 from app.infrastructure.repositories.db_session_repository import DBSessionRepository
+from app.infrastructure.repositories.db_user_repository import DBUserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class DBUnitOfWork(IUnitOfWork):
         # 初始化所有数据库仓库
         self.file = DBFileRepository(db_session=db_session)
         self.session = DBSessionRepository(db_session=db_session)
+        self.user = DBUserRepository(db_session=db_session)
 
         return self
 

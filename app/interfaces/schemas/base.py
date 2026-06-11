@@ -14,7 +14,7 @@ class Response(BaseModel, Generic[T]):
     @staticmethod
     def success(msg: str = "success", data: Optional[T] = None) -> "Response[T]":
         """成功消息，传递msg+data，code固定为200"""
-        return Response(coe=200, msg=msg, data=data if data is not None else {})
+        return Response(code=200, msg=msg, data=data if data is not None else {})
 
     @staticmethod
     def fail(code: int, msg: str, data: Optional[T] = None) -> "Response[T]":

@@ -39,6 +39,20 @@ class NotFoundError(AppException):
         super().__init__(status_code=404, code=404, msg=msg)
 
 
+class UnauthorizedError(AppException):
+    """未认证错误"""
+
+    def __init__(self, msg: str = "未认证或登录已过期"):
+        super().__init__(status_code=401, code=401, msg=msg)
+
+
+class ForbiddenError(AppException):
+    """无权限错误"""
+
+    def __init__(self, msg: str = "无权限执行该操作"):
+        super().__init__(status_code=403, code=403, msg=msg)
+
+
 class ValidationError(AppException):
     """数据校验错误"""
 

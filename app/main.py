@@ -11,7 +11,7 @@ from app.infrastructure.storage.postgres import get_postgres
 from app.infrastructure.storage.redis import get_redis
 from app.interfaces.endpoints.routes import router
 from app.interfaces.errors.exception_handlers import register_exception_handlers
-from app.interfaces.service_dependencies import get_agent_service
+from app.interfaces.service_dependencies import get_agent_service, get_auth_service
 from core.config import get_settings
 
 # 1.加载配置信息
@@ -24,11 +24,24 @@ logger = logging.getLogger()
 # 3. 定义FastAPI路由tags标签
 openai_tags = [
     {
+        "name": "认证模块",
+        "description": "包含 **用户登录**、**当前用户信息** 等接口，用于完成后台访问鉴权。",
+    },
+    {
         "name": "状态模块",
         "description": "包含 **状态检测** 等 API 接口，用于检测系统的运行状态。",
     },
     {
         "name": "设置模块",
+        "description": "包含 **LLM配置**、**Agent配置**、**MCP服务**、**A2A服务** 等接口，用于管理智能体运行配置。",
+    },
+    {
+        "name": "文件模块",
+        "description": "包含 **文件上传**、**文件信息查询**、**文件下载** 等接口，用于管理对话相关文件。",
+    },
+    {
+        "name": "会话模块",
+        "description": "包含 **会话创建**、**会话列表**、**会话详情**、**聊天流式响应**、**沙箱文件/终端/VNC** 等接口，用于管理智能体任务会话。",
     },
 ]
 
@@ -44,6 +57,15 @@ async def lifespan(app: FastAPI):
     await get_redis().init()
     await get_postgres().init()
     await get_cos().init()
+
+    created_admin = await get_auth_service().bootstrap_admin(
+        settings.admin_username,
+        settings.admin_password,
+    )
+    if created_admin:
+        logger.info("已初始化管理员用户")
+    elif not settings.admin_username or not settings.admin_password:
+        logger.warning("未配置管理员初始化账号或密码，跳过管理员初始化")
 
     try:
         # 3.lifespan节点/分解

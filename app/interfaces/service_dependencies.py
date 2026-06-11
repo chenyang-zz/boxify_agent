@@ -1,14 +1,17 @@
 import logging
-from functools import lru_cache
 
 from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
+from app.application.errors.exceptions import UnauthorizedError
 from app.application.services.agent_service import AgentService
 from app.application.services.app_config_service import AppConfigService
+from app.application.services.auth_service import AuthService
 from app.application.services.file_service import FileService
 from app.application.services.session_service import SessionService
 from app.application.services.status_service import StatusService
+from app.domain.models.user import User
 from app.infrastructure.external.file_storage.cos_file_storage import CosFileStorage
 from app.infrastructure.external.health_checker.postgres_health_checker import (
     PostgresHealthChecker,
@@ -31,6 +34,7 @@ from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_app_config_service() -> AppConfigService:
@@ -55,6 +59,43 @@ def get_status_service(
     # 2.创建服务并返回
     logger.info("加载获取StatusService")
     return StatusService(checkers=[postgres_checker, redis_checker])
+
+
+def get_auth_service() -> AuthService:
+    """获取认证服务"""
+    return AuthService(
+        uow_factory=get_uow,
+        secret_key=settings.auth_secret_key,
+        access_token_expire_minutes=settings.auth_access_token_expire_minutes,
+    )
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> User:
+    """根据Bearer token获取当前用户"""
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise UnauthorizedError()
+    return await auth_service.get_user_by_token(credentials.credentials)
+
+
+async def require_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> HTTPAuthorizationCredentials:
+    """要求请求携带Bearer token，不访问数据库"""
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise UnauthorizedError()
+    return credentials
+
+
+async def require_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """要求当前用户为可用状态"""
+    if not current_user.is_active:
+        raise UnauthorizedError()
+    return current_user
 
 
 def get_file_service(
