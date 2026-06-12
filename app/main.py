@@ -11,7 +11,11 @@ from app.infrastructure.storage.postgres import get_postgres
 from app.infrastructure.storage.redis import get_redis
 from app.interfaces.endpoints.routes import router
 from app.interfaces.errors.exception_handlers import register_exception_handlers
-from app.interfaces.service_dependencies import get_agent_service, get_auth_service
+from app.interfaces.service_dependencies import (
+    get_agent_task_service,
+    get_app_config_bootstrap_service,
+    get_auth_service,
+)
 from core.config import get_settings
 
 # 1.加载配置信息
@@ -58,7 +62,8 @@ async def lifespan(app: FastAPI):
     await get_postgres().init()
     await get_cos().init()
 
-    created_admin = await get_auth_service().bootstrap_admin(
+    auth_service = get_auth_service()
+    created_admin = await auth_service.bootstrap_admin(
         settings.admin_username,
         settings.admin_password,
     )
@@ -66,6 +71,11 @@ async def lifespan(app: FastAPI):
         logger.info("已初始化管理员用户")
     elif not settings.admin_username or not settings.admin_password:
         logger.warning("未配置管理员初始化账号或密码，跳过管理员初始化")
+    admin_user = created_admin
+    if not admin_user and settings.admin_username:
+        admin_user = await auth_service.get_user_by_username(settings.admin_username)
+    if admin_user:
+        await get_app_config_bootstrap_service().bootstrap_admin_app_config(admin_user)
 
     try:
         # 3.lifespan节点/分解
@@ -75,7 +85,7 @@ async def lifespan(app: FastAPI):
         logger.info("boxify正在关闭")
         try:
             # 等待agent服务关闭
-            await asyncio.wait_for(get_agent_service().shutdown(), timeout=30.0)
+            await asyncio.wait_for(get_agent_task_service().shutdown(), timeout=30.0)
             logger.info("agent服务成功关闭")
         except asyncio.TimeoutError:
             logger.warning("agent服务关闭超时，强制关闭，部分任务将被释放")

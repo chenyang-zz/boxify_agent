@@ -53,6 +53,11 @@ class AuthService:
             raise ForbiddenError("用户已被禁用")
         return user
 
+    async def get_user_by_username(self, username: str) -> Optional[User]:
+        """根据用户名获取用户"""
+        async with self._uow_factory() as uow:
+            return await uow.user.get_by_username(username)
+
     def create_access_token(self, user: User) -> str:
         """为用户创建access token"""
         return self._token_service.create_access_token(

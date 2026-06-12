@@ -1,8 +1,8 @@
 from enum import Enum
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LLMConfig(BaseModel):
@@ -101,3 +101,13 @@ class AppConfig(BaseModel):
 
     # Pydantic配置，允许传递额外的参数初始化
     model_config = ConfigDict(extra="allow")
+
+
+def create_default_app_config() -> AppConfig:
+    """创建系统默认应用配置"""
+    return AppConfig(
+        llm_config=LLMConfig(),
+        agent_config=AgentConfig(),
+        mcp_config=MCPConfig(),
+        a2a_config=A2AConfig(),
+    )

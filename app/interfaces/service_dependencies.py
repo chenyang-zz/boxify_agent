@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from app.application.errors.exceptions import UnauthorizedError
 from app.application.services.agent_service import AgentService
+from app.application.services.agent_task_service import AgentTaskService
+from app.application.services.app_config_bootstrap_service import (
+    AppConfigBootstrapService,
+)
 from app.application.services.app_config_service import AppConfigService
 from app.application.services.auth_service import AuthService
 from app.application.services.file_service import FileService
@@ -35,30 +39,7 @@ from core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 bearer_scheme = HTTPBearer(auto_error=False)
-
-
-def get_app_config_service() -> AppConfigService:
-    """获取应用配置服务"""
-    # 1.获取数据仓库并打印日志
-    logger.info("加载获取AppConfigService")
-    file_app_config_repository = FileAppConfigRepository(settings.app_config_filepath)
-
-    # 2.实例化AppConfigService
-    return AppConfigService(app_config_repository=file_app_config_repository)
-
-
-def get_status_service(
-    db_session: AsyncSession = Depends(get_db_session),
-    redis_client: RedisClient = Depends(get_redis),
-) -> StatusService:
-    """获取状态服务"""
-    # 1.初始化postgres和redis状态检查
-    postgres_checker = PostgresHealthChecker(db_session)
-    redis_checker = RedisHealthChecker(redis_client)
-
-    # 2.创建服务并返回
-    logger.info("加载获取StatusService")
-    return StatusService(checkers=[postgres_checker, redis_checker])
+AGENT_TASK_CLS = RedisStreamTask
 
 
 def get_auth_service() -> AuthService:
@@ -98,6 +79,38 @@ async def require_active_user(
     return current_user
 
 
+def get_app_config_service(
+    current_user: User = Depends(require_active_user),
+) -> AppConfigService:
+    """获取应用配置服务"""
+    logger.info("加载获取AppConfigService")
+    return AppConfigService(uow_factory=get_uow, user_id=current_user.id)
+
+
+def get_app_config_bootstrap_service() -> AppConfigBootstrapService:
+    """获取应用配置初始化服务"""
+    return AppConfigBootstrapService(
+        uow_factory=get_uow,
+        legacy_app_config_repository=FileAppConfigRepository(
+            settings.app_config_filepath
+        ),
+    )
+
+
+def get_status_service(
+    db_session: AsyncSession = Depends(get_db_session),
+    redis_client: RedisClient = Depends(get_redis),
+) -> StatusService:
+    """获取状态服务"""
+    # 1.初始化postgres和redis状态检查
+    postgres_checker = PostgresHealthChecker(db_session)
+    redis_checker = RedisHealthChecker(redis_client)
+
+    # 2.创建服务并返回
+    logger.info("加载获取StatusService")
+    return StatusService(checkers=[postgres_checker, redis_checker])
+
+
 def get_file_service(
     cos: Cos = Depends(get_cos),
 ) -> FileService:
@@ -119,14 +132,19 @@ def get_session_service() -> SessionService:
     return SessionService(uow_factory=get_uow, sandbox_cls=DockerSandbox)
 
 
-def get_agent_service(
+def get_agent_task_service() -> AgentTaskService:
+    """获取Agent任务生命周期服务"""
+    return AgentTaskService(task_cls=AGENT_TASK_CLS)
+
+
+async def get_agent_service(
     cos: Cos = Depends(get_cos),
+    current_user: User = Depends(require_active_user),
 ) -> AgentService:
-    # 获取应用配置信息(读取配置需要实时获取,所以不配置缓存)
-    app_config_repository = FileAppConfigRepository(
-        config_path=settings.app_config_filepath
-    )
-    app_config = app_config_repository.load()
+    # 获取当前用户应用配置信息(读取配置需要实时获取,所以不配置缓存)
+    app_config = await AppConfigService(
+        uow_factory=get_uow, user_id=current_user.id
+    ).get_app_config()
 
     # 构建依赖实例
     llm = OpenAILLM(app_config.llm_config)
@@ -144,7 +162,7 @@ def get_agent_service(
         mcp_config=app_config.mcp_config,
         a2a_config=app_config.a2a_config,
         sandbox_cls=DockerSandbox,
-        task_cls=RedisStreamTask,
+        task_cls=AGENT_TASK_CLS,
         json_parser=RepairJSONParser(),
         search_engine=BingSearchEngine,
         file_storage=file_storage,

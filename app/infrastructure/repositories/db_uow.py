@@ -13,9 +13,11 @@ from typing import Optional, Self, cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.repositories.vow import IUnitOfWork
+from app.infrastructure.repositories.db_app_config_repository import DBAppConfigRepository
 from app.infrastructure.repositories.db_file_repository import DBFileRepository
 from app.infrastructure.repositories.db_session_repository import DBSessionRepository
 from app.infrastructure.repositories.db_user_repository import DBUserRepository
+from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ class DBUnitOfWork(IUnitOfWork):
         """构造函数，完成UoW类初始化"""
         self.session_factory = session_factory
         self.db_session: Optional[AsyncSession] = None
+        self._settings = get_settings()
 
     async def commit(self):
         """提交数据库持久化"""
@@ -51,6 +54,10 @@ class DBUnitOfWork(IUnitOfWork):
         self.db_session = db_session
 
         # 初始化所有数据库仓库
+        self.app_config = DBAppConfigRepository(
+            db_session=db_session,
+            encryption_key=self._settings.app_config_encryption_key,
+        )
         self.file = DBFileRepository(db_session=db_session)
         self.session = DBSessionRepository(db_session=db_session)
         self.user = DBUserRepository(db_session=db_session)

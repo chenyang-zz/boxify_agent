@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     auth_access_token_expire_minutes: int = 1440
     admin_username: str = ""
     admin_password: str = Field(default="", repr=False)
+    app_config_encryption_key: str = Field(default="", repr=False)
 
     # Sandbox配置
     sandbox_address: Optional[str] = None

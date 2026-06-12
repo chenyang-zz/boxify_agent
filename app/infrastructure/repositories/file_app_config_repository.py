@@ -6,18 +6,14 @@ from filelock import FileLock
 
 from app.application.errors.exceptions import ServerRequestsError
 from app.domain.models.app_config import (
-    A2AConfig,
-    AgentConfig,
     AppConfig,
-    LLMConfig,
-    MCPConfig,
+    create_default_app_config,
 )
-from app.domain.repositories.app_config_repository import AppConfigRepository
 
 logger = logging.getLogger(__name__)
 
 
-class FileAppConfigRepository(AppConfigRepository):
+class FileAppConfigRepository:
     """基于本地文件的App配置数据仓库"""
 
     def __init__(self, config_path: str) -> None:
@@ -33,13 +29,26 @@ class FileAppConfigRepository(AppConfigRepository):
     def _create_default_app_config_if_not_exists(self):
         """如果配置文件不存在，则使用默认配置并写入到本地文件"""
         if not self._config_path.exists():
-            default_app_config = AppConfig(
-                llm_config=LLMConfig(),
-                agent_config=AgentConfig(),
-                mcp_config=MCPConfig(),
-                a2a_config=A2AConfig(),
-            )
-            self.save(default_app_config)
+            self.save(create_default_app_config())
+
+    def exists(self) -> bool:
+        """判断旧配置文件是否存在"""
+        return self._config_path.exists()
+
+    def load_existing(self) -> AppConfig:
+        """读取已存在的旧配置文件，不创建默认文件"""
+        if not self.exists():
+            raise FileNotFoundError(str(self._config_path))
+
+        try:
+            with open(self._config_path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+                if data:
+                    return AppConfig.model_validate(data)
+            return create_default_app_config()
+        except Exception as e:
+            logger.error(f"读取应用配置失败: {str(e)}")
+            raise ServerRequestsError("读取应用配置失败，请稍后尝试")
 
     def load(self) -> AppConfig:
         """从本地yaml文件中加载应用配置"""
@@ -54,12 +63,7 @@ class FileAppConfigRepository(AppConfigRepository):
                     return AppConfig.model_validate(data)
 
             # 3.兜底：文件存在但为空时，返回默认配置并持久化
-            default_app_config = AppConfig(
-                llm_config=LLMConfig(),
-                agent_config=AgentConfig(),
-                mcp_config=MCPConfig(),
-                a2a_config=A2AConfig(),
-            )
+            default_app_config = create_default_app_config()
             self.save(default_app_config)
             return default_app_config
         except Exception as e:

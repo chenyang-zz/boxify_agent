@@ -9,6 +9,7 @@
 from abc import ABC, abstractmethod
 from typing import Self
 
+from app.domain.repositories.app_config_repository import AppConfigRepository
 from app.domain.repositories.file_repository import FileRepository
 from app.domain.repositories.session_repository import SessionRepository
 from app.domain.repositories.user_repository import UserRepository
@@ -17,6 +18,7 @@ from app.domain.repositories.user_repository import UserRepository
 class IUnitOfWork(ABC):
     """Uow模式协议接口"""
 
+    app_config: AppConfigRepository
     file: FileRepository
     session: SessionRepository
     user: UserRepository

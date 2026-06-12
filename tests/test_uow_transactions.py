@@ -15,6 +15,7 @@ async def test_db_uow_clears_session_after_successful_commit():
 
     async with uow:
         assert uow.db_session is db_session
+        assert uow.app_config.db_session is db_session
         assert uow.file.db_session is db_session
         assert uow.session.db_session is db_session
         assert uow.user.db_session is db_session
