@@ -1,0 +1,37 @@
+app/infrastructure/repositories/db_uow.py
+  s_44b7f7a2f18bd5::t_350456de57209a 78,81-84
+app/domain/agent_task_runner.py
+  s_44b7f7a2f18bd5::t_7bdc587ab86947 67,77,101-102,139-140,161-162,191-192,201-202,217-218,429-430,435-436,441,446-447,458-459,467-468,478-479
+app/application/services/agent_service.py
+  s_44b7f7a2f18bd5::t_74fae7e3ed4ad6 101,117-118,147-148,179-185,214-215,232-233,258-259,271-272
+app/application/services/session_service.py
+  s_44b7f7a2f18bd5::t_350456de57209a 32,39-40,46-47,52-53,59-60,66,71-72,78-79,89-90,116-117,142-143
+app/infrastructure/external/file_storage/cos_file_storage.py
+  s_44b7f7a2f18bd5::t_74fae7e3ed4ad6 28,63-64,75-76
+app/domain/services/flows/planner_react.py
+  s_44b7f7a2f18bd5::t_74fae7e3ed4ad6 54,95-96,123-124
+app/application/services/file_service.py
+  s_44b7f7a2f18bd5::t_350456de57209a 19,28-29
+app/application/services/auth_service.py
+  s_44b7f7a2f18bd5::t_350456de57209a 19,32-33,43,48-49,66-67
+app/domain/services/agents/base.py
+  s_44b7f7a2f18bd5::t_74fae7e3ed4ad6 45,56-57,187-188,198-199,237-238
+tests/test_uow_transactions.py
+  s_44b7f7a2f18bd5::t_424575acf8b4ab 1-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7b837f10430a3edeba3f4856a046a1f24833679f",
+  "prompts": {},
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
