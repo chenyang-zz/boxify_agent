@@ -1,0 +1,99 @@
+app/application/security/app_config_encryption.py
+  s_44b7f7a2f18bd5::t_aefce2deae3e21 1,3,18-20,96-105
+  s_44b7f7a2f18bd5::t_1d2c83ab0da45c 2,4-17,21-95
+app/infrastructure/models/__init__.py
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 5,12
+app/domain/services/tools/mcp.py
+  s_44b7f7a2f18bd5::t_4a8a16454210a0 33
+core/config.py
+  s_44b7f7a2f18bd5::t_227fd188b127fb 41
+app/application/services/auth_service.py
+  s_44b7f7a2f18bd5::t_fd48f3506f7989 56-60
+app/infrastructure/repositories/file_app_config_repository.py
+  s_44b7f7a2f18bd5::t_4ac62ea4d8b2ca 10,16,32-51,66
+app/domain/repositories/vow.py
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 12,21
+alembic/versions/bc7e4c1a2d03_create_app_configs_table.py
+  s_44b7f7a2f18bd5::t_b5e9d9848ecb3d 1-75
+app/infrastructure/repositories/db_uow.py
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 16
+  s_44b7f7a2f18bd5::t_227fd188b127fb 20,35,57-60
+tests/test_uow_transactions.py
+  s_44b7f7a2f18bd5::t_67ce35aa0fbaad 18
+tests/test_app_config_encryption.py
+  s_44b7f7a2f18bd5::t_7dc53328c466ff 1-2,4-14,18-58,75-105
+  s_44b7f7a2f18bd5::t_30abd07c4fef2e 15-17,106-107,109-158
+  s_44b7f7a2f18bd5::t_0274ea77d6cc19 3,108
+  s_44b7f7a2f18bd5::t_acbf08de082e2d 59-74
+tests/test_agent_task_service.py
+  s_44b7f7a2f18bd5::t_cad533fd0e50d6 1-21
+app/domain/models/app_config.py
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 104-113
+  s_44b7f7a2f18bd5::t_e534e6ecc78b83 2,5
+app/domain/repositories/app_config_repository.py
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 1-2,9-14,17-18
+app/infrastructure/models/app_config.py
+  s_44b7f7a2f18bd5::t_33d18b72945665 62,64-72
+  s_44b7f7a2f18bd5::t_0c38fbae68467e 60-61,85
+  s_44b7f7a2f18bd5::t_28c3208f491ba5 8
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 1-7,9-47,54,63,73,79,86
+  s_44b7f7a2f18bd5::t_8d71c0e9176b9c 48-53,55-59,74-78,80-84
+app/infrastructure/repositories/db_app_config_repository.py
+  s_44b7f7a2f18bd5::t_504f7d35d7fe49 1-5,7-14,21,23-27,29-35,44-50,54
+  s_44b7f7a2f18bd5::t_0c38fbae68467e 6,15-18,20,36,38,41-42
+  s_44b7f7a2f18bd5::t_be5fcfcaaf4ca3 19,22
+  s_44b7f7a2f18bd5::t_33d18b72945665 28
+  s_44b7f7a2f18bd5::t_8d71c0e9176b9c 37,39-40,51-53,55
+  s_44b7f7a2f18bd5::t_4539d61f9d3e27 43
+app/domain/services/tools/a2a.py
+  s_44b7f7a2f18bd5::t_4a8a16454210a0 24
+app/interfaces/service_dependencies.py
+  s_44b7f7a2f18bd5::t_c0e5a7a6ef394c 82-84,87,140,142,144-147
+  s_44b7f7a2f18bd5::t_dc27ee546a8e0d 9-12,88-97,135-136
+  s_44b7f7a2f18bd5::t_faea453cd5dcf7 42,137,165
+  h_e1f1392360ad67 85-86,98-113
+app/application/services/agent_task_service.py
+  s_44b7f7a2f18bd5::t_cad533fd0e50d6 1-14
+app/application/services/app_config_bootstrap_service.py
+  s_44b7f7a2f18bd5::t_05ce5f7c0d9b23 1,3,5-10,23-28,30-56
+  s_44b7f7a2f18bd5::t_32f9ffd5c42ad4 2,11-17,19-22,29
+  s_44b7f7a2f18bd5::t_89ddd21eaf0c9e 4,18
+app/main.py
+  s_44b7f7a2f18bd5::t_91e4799d4069bf 74-77
+  s_44b7f7a2f18bd5::t_dc27ee546a8e0d 14-18,78,88
+  h_e1f1392360ad67 65-66
+tests/test_user_app_config.py
+  s_44b7f7a2f18bd5::t_67ce35aa0fbaad 1,3,6-14,16-139,192-212,262-305
+  s_44b7f7a2f18bd5::t_446f22c5580b82 2,4-5,15,140-191,213-261
+app/application/security/__init__.py
+  s_44b7f7a2f18bd5::t_1d2c83ab0da45c 1,5
+.env.example
+  s_44b7f7a2f18bd5::t_4497bd28f25909 4
+  s_44b7f7a2f18bd5::t_227fd188b127fb 43-44,47
+  s_44b7f7a2f18bd5::t_d62d5d81d3d485 45-46
+pyproject.toml
+  s_44b7f7a2f18bd5::t_1f8e410611743f 14
+app/application/services/app_config_service.py
+  s_44b7f7a2f18bd5::t_4ac62ea4d8b2ca 13,22,24-25,27,29-34,38-40,44-46,48-50,52-54,56,60-62,66-68,70-72,74,80-81,113-115,117-118,120-121,123,128-130,132-134,136-137,139,141,148-150,152-154,156-157,159,161,166-167,207-208,210-213,215-220,222-224,229-230,232-237,239-240,242-244,246,251-252,254-259,261-262,264-266,268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3fd11195d46e25e972a52efe90740927073606db",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
