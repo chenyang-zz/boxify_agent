@@ -21,3 +21,4 @@ config.*.yaml
 .idea/
 .vscode/
 .DS_Store
+.gitnexus
