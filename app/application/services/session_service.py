@@ -15,7 +15,6 @@ from app.domain.models.file import File
 from app.domain.models.session import Session
 from app.domain.models.tool_result import ToolResult
 from app.domain.repositories.vow import IUnitOfWork
-from app.infrastructure import sandbox
 from app.interfaces.schemas.session import FileReadResponse, ShellReadResponse
 
 logger = logging.getLogger(__name__)
@@ -30,54 +29,54 @@ class SessionService:
         sandbox_cls: Type[Sandbox],
     ) -> None:
         """构造函数，完成会话服务的初始化"""
-        self._uow = uow_factory()
+        self._uow_factory = uow_factory
         self._sandbox_cls = sandbox_cls
 
     async def create_session(self) -> Session:
         """创建一个空白的新任务会话"""
         logger.info("创建一个空白新任务会话")
         session = Session(title="新对话")
-        async with self._uow:
-            await self._uow.session.save(session)
+        async with self._uow_factory() as uow:
+            await uow.session.save(session)
         logger.info(f"成功创建一个新任务会话: {session.id}")
         return session
 
     async def get_all_sessions(self) -> List[Session]:
         """获取项目所有任务会话列表"""
-        async with self._uow:
-            return await self._uow.session.get_all()
+        async with self._uow_factory() as uow:
+            return await uow.session.get_all()
 
     async def clear_unread_message_count(self, session_id: str) -> None:
         """清空指定会话的未读消息数"""
         logger.info(f"清除会话[{session_id}]未读消息数")
-        async with self._uow:
-            await self._uow.session.update_unread_message_count(session_id, 0)
+        async with self._uow_factory() as uow:
+            await uow.session.update_unread_message_count(session_id, 0)
 
     async def delete_session(self, session_id: str) -> None:
         """根据传递的会话id删除任务会话"""
         logger.info(f"正在删除会话，会话id: {session_id}")
         # 检查会话是否存在
-        async with self._uow:
-            session = await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(session_id)
             if not session:
                 logger.error(f"会话[{session_id}]不存在，删除失败")
                 raise NotFoundError(f"会话[{session_id}]不存在，删除失败")
 
             # 根据传递的会话id删除会话
-            await self._uow.session.delete_by_id(session_id)
+            await uow.session.delete_by_id(session_id)
             logger.info(f"删除会话[{session_id}]成功")
 
     async def get_session(self, session_id: str) -> Optional[Session]:
         """获取指定会话详情信息"""
-        async with self._uow:
-            return await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            return await uow.session.get_by_id(session_id)
 
     async def get_session_files(self, session_id: str) -> List[File]:
         """根据传递的会话id获取指定会话的文件列表信息"""
 
         logger.info(f"获取指定会话[{session_id}]下的文件列表信息")
-        async with self._uow:
-            session = await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(session_id)
         if not session:
             raise RuntimeError(f"当前会话下不存在[{session_id}]")
 
@@ -87,8 +86,8 @@ class SessionService:
         """根据传递的信息查看会话中指定文件的内容"""
         # 检查会话是否存在
         logger.info(f"获取会话[{session_id}]中的文件内容，文件路径: {filepath}")
-        async with self._uow:
-            session = await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(session_id)
         if not session:
             raise RuntimeError(f"当前会话不存在[{session_id}]")
 
@@ -114,8 +113,8 @@ class SessionService:
         logger.info(
             f"获取会话[{session_id}]中的shell内容输出，shell标识符: {shell_session_id}"
         )
-        async with self._uow:
-            session = await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(session_id)
         if not session:
             raise RuntimeError(f"当前会话不存在[{session_id}]")
 
@@ -140,8 +139,8 @@ class SessionService:
         """获取指定会话的vnc连接"""
         # 检查会话是否存在
         logger.info(f"获取会话[{session_id}]的VNC连接")
-        async with self._uow:
-            session = await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(session_id)
 
         if not session:
             raise RuntimeError(f"当前会话不存在[{session_id}]")

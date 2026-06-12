@@ -31,7 +31,6 @@ from app.domain.models.event import (
 from app.domain.models.file import File
 from app.domain.models.session import Session, SessionStatus
 from app.domain.repositories.vow import IUnitOfWork
-from app.infrastructure.storage.postgres import get_uow
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,6 @@ class AgentService:
     ) -> None:
         """构造函数，完成Agent服务的初始化"""
         self._uow_factory = uow_factory
-        self._uow = uow_factory()
         self._llm = llm
         self._agent_config = agent_config
         self._mcp_config = mcp_config
@@ -91,8 +89,6 @@ class AgentService:
             # 沙箱不存在，创建一个新的(被释放了)
             sandbox = await self._sandbox_cls.create()
             session.sandbox_id = sandbox.id
-            async with self._uow:
-                await self._uow.session.save(session)
 
         # 从沙箱中获取浏览器实例
         browser = await sandbox.get_browser()
@@ -102,7 +98,7 @@ class AgentService:
 
         # 创建AgentTaskRunner
         task_runner = AgentTaskRunner(
-            uow_factory=get_uow,
+            uow_factory=self._uow_factory,
             llm=self._llm,
             agent_config=self._agent_config,
             mcp_config=self._mcp_config,
@@ -118,8 +114,8 @@ class AgentService:
         # 创建任务Task并更新会话中的信息
         task = self._task_cls.create(task_runner=task_runner)
         session.task_id = task.id
-        async with self._uow:
-            await self._uow.session.save(session)
+        async with self._uow_factory() as uow:
+            await uow.session.save(session)
 
         return task
 
@@ -148,8 +144,8 @@ class AgentService:
         """根据传递的信息调用Agent服务发起对话请求"""
         try:
             # 检查会话是否存在
-            async with self._uow:
-                session = await self._uow.session.get_by_id(session_id)
+            async with self._uow_factory() as uow:
+                session = await uow.session.get_by_id(session_id)
 
             if not session:
                 logger.error(f"尝试与不存在的任务会话[{session_id}]对话")
@@ -168,14 +164,6 @@ class AgentService:
                         logger.error(f"会话[{session_id}]创建任务失败")
                         raise RuntimeError(f"会话[{session_id}]创建任务失败")
 
-                # 传递了消息则更新会话中的最后一条消息
-                async with self._uow:
-                    await self._uow.session.update_latest_message(
-                        session_id=session_id,
-                        message=message,
-                        timestamp=timestamp or datetime.now(),
-                    )
-
                 # 创建一个人类消息事件
                 message_event = MessageEvent(
                     role="user",
@@ -188,8 +176,13 @@ class AgentService:
                 # 将事件添加到任务的输入流中
                 event_id = await task.input_stream.put(message_event.model_dump_json())
                 message_event.id = event_id
-                async with self._uow:
-                    await self._uow.session.add_event(session_id, message_event)
+                async with self._uow_factory() as uow:
+                    await uow.session.update_latest_message(
+                        session_id=session_id,
+                        message=message,
+                        timestamp=timestamp or datetime.now(),
+                    )
+                    await uow.session.add_event(session_id, message_event)
 
                 # 执行任务
                 await task.invoke()
@@ -218,8 +211,8 @@ class AgentService:
                 logger.debug(f"从会话[{session_id}]中获取事件: {type(event).__name__}")
 
                 # 将未读消息数量重置为0
-                async with self._uow:
-                    await self._uow.session.update_unread_message_count(
+                async with self._uow_factory() as uow:
+                    await uow.session.update_unread_message_count(
                         session_id=session_id, count=0
                     )
 
@@ -236,8 +229,8 @@ class AgentService:
             logger.error(f"任务会话[{session_id}]对话出错: {str(e)}")
             event = ErrorEvent(error=str(e))
             try:
-                async with self._uow:
-                    await self._uow.session.add_event(session_id, event)
+                async with self._uow_factory() as uow:
+                    await uow.session.add_event(session_id, event)
             except (asyncio.CancelledError, Exception) as add_err:
                 logger.warning(
                     f"会话[{session_id}]添加错误事件失败(可能是客户端断开连接): {add_err}"
@@ -262,8 +255,8 @@ class AgentService:
         """根据传递的会话id停止指定会话"""
 
         # 查找会话是否存在
-        async with self._uow:
-            session = await self._uow.session.get_by_id(session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(session_id)
 
         if not session:
             logger.error(f"尝试获取不存在的会话[{session_id}]")
@@ -275,8 +268,8 @@ class AgentService:
             task.cancel()
 
         # 更新会话任务状态
-        async with self._uow:
-            await self._uow.session.update_status(
+        async with self._uow_factory() as uow:
+            await uow.session.update_status(
                 session_id,
                 SessionStatus.COMPLETED,
             )

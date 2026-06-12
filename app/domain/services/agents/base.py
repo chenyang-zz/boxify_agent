@@ -42,7 +42,7 @@ class BaseAgent(ABC):
         tools: List[BaseTool],  # 工具列表
     ) -> None:
         """构造函数，完成agent的初始化"""
-        self._uow = uow_factory()
+        self._uow_factory = uow_factory
         self._llm = llm
         self._agent_config = agent_config
         self._session_id = session_id
@@ -53,8 +53,8 @@ class BaseAgent(ABC):
     async def _ensure_memory(self) -> None:
         """确保智能体记忆是存在的"""
         if self._memory is None:
-            async with self._uow:
-                self._memory = await self._uow.session.get_memory(
+            async with self._uow_factory() as uow:
+                self._memory = await uow.session.get_memory(
                     self._session_id, self.name
                 )
 
@@ -184,8 +184,8 @@ class BaseAgent(ABC):
         memory.add_messages(messages)
 
         # 将记忆持久化道数据仓库中
-        async with self._uow:
-            await self._uow.session.save_memory(self._session_id, self.name, memory)
+        async with self._uow_factory() as uow:
+            await uow.session.save_memory(self._session_id, self.name, memory)
 
     async def compact_memory(self) -> None:
         """压缩Agent记忆"""
@@ -195,8 +195,8 @@ class BaseAgent(ABC):
         memory.compact()
 
         # 将记忆持久化道数据仓库中
-        async with self._uow:
-            await self._uow.session.save_memory(self._session_id, self.name, memory)
+        async with self._uow_factory() as uow:
+            await uow.session.save_memory(self._session_id, self.name, memory)
 
     async def roll_back(self, message: Message) -> None:
         """Agent状态回滚，该函数确保Agent的消息列表状态时正确的，用于发送新消息、暂停/停止任务、通知用户"""
@@ -234,8 +234,8 @@ class BaseAgent(ABC):
             memory.roll_back()
 
         # 将记忆持久化道数据仓库中
-        async with self._uow:
-            await self._uow.session.save_memory(self._session_id, self.name, memory)
+        async with self._uow_factory() as uow:
+            await uow.session.save_memory(self._session_id, self.name, memory)
 
     async def invoke(
         self,

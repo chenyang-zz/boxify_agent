@@ -75,6 +75,10 @@ class DBUnitOfWork(IUnitOfWork):
             logger.warning("UoW提交/回滚操作被取消(可能是客户端断开连接)")
         except Exception as e:
             logger.warning(f"UoW提交/回滚操作失败: {e}")
+            raise
         finally:
             db_session: AsyncSession = cast(AsyncSession, self.db_session)
-            await db_session.close()
+            try:
+                await db_session.close()
+            finally:
+                self.db_session = None

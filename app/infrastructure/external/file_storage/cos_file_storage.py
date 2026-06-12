@@ -25,7 +25,7 @@ class CosFileStorage(FileStorage):
         cos: Cos,
     ):
         """构造函数，完成COS文件存储扩展的初始化"""
-        self._uow = uow_factory()
+        self._uow_factory = uow_factory
         self.bucket = bucket
         self.cos = cos
 
@@ -60,8 +60,8 @@ class CosFileStorage(FileStorage):
                 mime_type=upload_file.content_type or "",
                 size=upload_file.size or 0,
             )
-            async with self._uow:
-                await self._uow.file.save(file)
+            async with self._uow_factory() as uow:
+                await uow.file.save(file)
 
             return file
         except Exception as e:
@@ -72,8 +72,8 @@ class CosFileStorage(FileStorage):
         """根据文件id查询数据并下载文件"""
         try:
             # 查询对应的文件记录是否存在
-            async with self._uow:
-                file = await self._uow.file.get_by_id(file_id)
+            async with self._uow_factory() as uow:
+                file = await uow.file.get_by_id(file_id)
             if not file:
                 raise ValueError(f"该文件不存在，文件id: {file_id}")
 

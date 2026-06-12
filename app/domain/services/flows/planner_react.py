@@ -51,7 +51,7 @@ class PlannerReActFlow(BaseFlow):
     ) -> None:
         """构造函数，完成规划与执行流的初始化"""
         # 流初始化数据配置
-        self._uow = uow_factory()
+        self._uow_factory = uow_factory
         self._session_id = session_id
         self.status = FlowStatus.IDLE
         self.plan: Optional[Plan] = None
@@ -92,8 +92,8 @@ class PlannerReActFlow(BaseFlow):
     async def invoke(self, message: Message) -> AsyncGenerator[BaseEvent, None]:
         """传递消息，运行流，在六中调用planner&react智能体组合完成任务并返回对应事件"""
         # 调用会话仓库查询会话是否存在
-        async with self._uow:
-            session = await self._uow.session.get_by_id(self._session_id)
+        async with self._uow_factory() as uow:
+            session = await uow.session.get_by_id(self._session_id)
         if not session:
             raise ValueError(f"会话[{self._session_id}]不存在，请核实后重试")
 
@@ -120,8 +120,8 @@ class PlannerReActFlow(BaseFlow):
             self.status = FlowStatus.EXECUTING
 
         # 更新会话状态为运行中
-        async with self._uow:
-            await self._uow.session.update_status(
+        async with self._uow_factory() as uow:
+            await uow.session.update_status(
                 self._session_id, SessionStatus.RUNNING
             )
 

@@ -42,7 +42,6 @@ from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.flows.planner_react import PlannerReActFlow
 from app.domain.services.tools.a2a import A2ATool
 from app.domain.services.tools.mcp import MCPTool
-from app.infrastructure.storage.postgres import get_uow
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ class AgentTaskRunner(TaskRunner):
         sandbox: Sandbox,  # 沙箱
     ) -> None:
         """构造函数，完成Agent任务运行器的创建"""
-        self._uow = uow_factory()
+        self._uow_factory = uow_factory
         self._session_id = session_id
         self._sandbox = sandbox
         self._mcp_config = mcp_config
@@ -75,7 +74,7 @@ class AgentTaskRunner(TaskRunner):
         self._file_storage = file_storage
         self._browser = browser
         self._flow = PlannerReActFlow(
-            uow_factory=get_uow,
+            uow_factory=uow_factory,
             llm=llm,
             agent_config=agent_config,
             session_id=session_id,
@@ -99,8 +98,8 @@ class AgentTaskRunner(TaskRunner):
             event.id = event_id
 
         # 将事件添加到对应会话中
-        async with self._uow:
-            await self._uow.session.add_event(self._session_id, event)
+        async with self._uow_factory() as uow:
+            await uow.session.add_event(self._session_id, event)
 
     @classmethod
     async def _pop_event(cls, task: Task) -> Optional[Event]:
@@ -137,8 +136,8 @@ class AgentTaskRunner(TaskRunner):
             # 判断是否上传成功
             if tool_result.success:
                 file.filepath = filepath
-                async with self._uow:
-                    await self._uow.file.save(file)
+                async with self._uow_factory() as uow:
+                    await uow.file.save(file)
                 return file
         except Exception as e:
             logger.exception(f"AgentTaskRunner同步文件[{file_id}]失败: {str(e)}")
@@ -159,8 +158,8 @@ class AgentTaskRunner(TaskRunner):
                     # 文件是否同步成功
                     if file:
                         attachments.append(file)
-                        async with self._uow:
-                            await self._uow.session.add_file(self._session_id, file)
+                        async with self._uow_factory() as uow:
+                            await uow.session.add_file(self._session_id, file)
 
                 # 更新消息事件中的attachments
                 event.attachments = attachments
@@ -189,8 +188,8 @@ class AgentTaskRunner(TaskRunner):
         """将沙箱中指定文件路径数据同步到存储桶中"""
         try:
             # 根据文件路径从会话中查找文件数据
-            async with self._uow:
-                file = await self._uow.session.get_file_by_path(
+            async with self._uow_factory() as uow:
+                file = await uow.session.get_file_by_path(
                     self._session_id, filepath
                 )
 
@@ -199,8 +198,8 @@ class AgentTaskRunner(TaskRunner):
 
             # 判断会话中的文件是否存在
             if file:
-                async with self._uow:
-                    await self._uow.session.remove_file(self._session_id, file.id)
+                async with self._uow_factory() as uow:
+                    await uow.session.remove_file(self._session_id, file.id)
 
             # 提取文件名字、文件信息并更新文件路径
             filename = filepath.split("/")[-1]
@@ -215,8 +214,8 @@ class AgentTaskRunner(TaskRunner):
             file.filepath = filepath
 
             # 往会话总新增一个文件信息
-            async with self._uow:
-                await self._uow.session.add_file(self._session_id, file)
+            async with self._uow_factory() as uow:
+                await uow.session.add_file(self._session_id, file)
 
             return file
         except Exception as e:
@@ -427,25 +426,25 @@ class AgentTaskRunner(TaskRunner):
 
                         # 如果类型事件为标题事件则更新会话标题
                         if isinstance(event, TitleEvent):
-                            async with self._uow:
-                                await self._uow.session.update_title(
+                            async with self._uow_factory() as uow:
+                                await uow.session.update_title(
                                     self._session_id, event.title
                                 )
                         elif isinstance(event, MessageEvent):
                             # 如果事件为消息事件，则更新最新消息并新增未读消息数
-                            async with self._uow:
-                                await self._uow.session.update_latest_message(
+                            async with self._uow_factory() as uow:
+                                await uow.session.update_latest_message(
                                     self._session_id,
                                     event.message,
                                     event.created_at,
                                 )
-                                await self._uow.session.increment_unread_message_count(
+                                await uow.session.increment_unread_message_count(
                                     self._session_id
                                 )
                         elif isinstance(event, WaitEvent):
                             # 如果事件为等待，则更新会话状态并终止程序
-                            async with self._uow:
-                                await self._uow.session.update_status(
+                            async with self._uow_factory() as uow:
+                                await uow.session.update_status(
                                     self._session_id, SessionStatus.WAITING
                                 )
                             return
@@ -456,8 +455,8 @@ class AgentTaskRunner(TaskRunner):
                             break
 
             # 更新会话状态为已完成
-            async with self._uow:
-                await self._uow.session.update_status(
+            async with self._uow_factory() as uow:
+                await uow.session.update_status(
                     self._session_id, SessionStatus.COMPLETED
                 )
 
@@ -465,8 +464,8 @@ class AgentTaskRunner(TaskRunner):
             # 异步任务被取消，推送结束事件并更新状态
             logger.info("AgentTaskRunner运行取消")
             await self._put_and_add_event(task, DoneEvent())
-            async with self._uow:
-                await self._uow.session.update_status(
+            async with self._uow_factory() as uow:
+                await uow.session.update_status(
                     self._session_id, SessionStatus.COMPLETED
                 )
             raise
@@ -476,8 +475,8 @@ class AgentTaskRunner(TaskRunner):
             await self._put_and_add_event(
                 task, ErrorEvent(error=f"AgentTaskRunner运行出错: {str(e)}")
             )
-            async with self._uow:
-                await self._uow.session.update_status(
+            async with self._uow_factory() as uow:
+                await uow.session.update_status(
                     self._session_id, SessionStatus.COMPLETED
                 )
         finally:
