@@ -1,0 +1,80 @@
+app/main.py
+  h_e1f1392360ad67 75
+app/tasks/notebook/document_parse.py
+  s_44b7f7a2f18bd5::t_aec3441237bef2 16,48
+  s_44b7f7a2f18bd5::t_285ac3fa052cd9 41-47,49,112-121
+  h_e1f1392360ad67 2,18,94
+tests/test_document_parser.py
+  s_44b7f7a2f18bd5::t_8d521baa477b29 1-6,8
+  s_44b7f7a2f18bd5::t_51a06c955a1919 7
+tests/test_notebook_document_parse.py
+  s_44b7f7a2f18bd5::t_50937162b2fb78 1-22
+app/utils/__init__.py
+  s_44b7f7a2f18bd5::t_e823112ebf949a 1
+tests/test_es_knowledge_search.py
+  s_44b7f7a2f18bd5::t_7da9ff15f10d32 1-120
+app/domain/services/notebook/parser.py
+  s_44b7f7a2f18bd5::t_ce8ca25f909d81 46-48,50-51
+  h_e1f1392360ad67 40-45,49
+Makefile
+  s_44b7f7a2f18bd5::t_1a6cd5af7f0aea 1-2,4-10
+app/infrastructure/external/document_storage/document_storage.py
+  s_44b7f7a2f18bd5::t_b1bc67bd9c7a1f 6,42
+  s_44b7f7a2f18bd5::t_6346a42b9e6177 33,43-52
+app/utils/hash.py
+  s_44b7f7a2f18bd5::t_3812a3351b5653 1-6
+app/application/services/document_service.py
+  s_44b7f7a2f18bd5::t_47703cb609a81f 59-62,64
+  s_44b7f7a2f18bd5::t_4d8581dbb99a08 13,63
+tests/test_document_storage.py
+  s_44b7f7a2f18bd5::t_57acd334db5640 1,3-9,11-12,19-30
+  s_44b7f7a2f18bd5::t_64df6619c2e016 2,10
+  s_44b7f7a2f18bd5::t_e4ff83ab336166 13-18
+tests/test_notebook_schema.py
+  s_44b7f7a2f18bd5::t_09820b5469410a 1-24
+.gitignore
+  s_44b7f7a2f18bd5::t_fb45cf1cee3d6a 4
+app/infrastructure/external/knowledge_search/es_knowledge_search.py
+  s_44b7f7a2f18bd5::t_79392c080aee2a 17-21,157,165-189
+tests/test_hash_utils.py
+  s_44b7f7a2f18bd5::t_46a3d4ab77f4b8 5
+  s_44b7f7a2f18bd5::t_3c64a8c6847ffb 1-4,6-7
+docker-compose.yml
+  h_e1f1392360ad67 32
+  s_44b7f7a2f18bd5::t_4f2a06dbe34dc5 30
+  s_44b7f7a2f18bd5::t_64f9a3d55fce99 24-25,27-29,31,34-39
+  s_44b7f7a2f18bd5::t_ee75152e8fbea5 26,33
+  s_44b7f7a2f18bd5::t_56594f1fc47bd0 22
+app/interfaces/endpoints/notebook/tags.py
+  s_44b7f7a2f18bd5::t_0a1fde411cb14d 11-16
+app/interfaces/endpoints/notebook/documents.py
+  h_e1f1392360ad67 1-2,21,42,131-133,160
+  s_44b7f7a2f18bd5::t_c185e44932ba47 8,148,158-159,161-163
+  s_44b7f7a2f18bd5::t_8290833f519b3e 22-23,43-45,58-63,83-88,98-103,113-118,134-136,146-147,149-151
+app/interfaces/schemas/notebook.py
+  s_44b7f7a2f18bd5::t_8f4e7301b51cac 3,48-49
+  s_44b7f7a2f18bd5::t_331768f3708363 46-47,50-56
+pyproject.toml
+  s_44b7f7a2f18bd5::t_7ddba4b857ff2d 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "2868f10696f8fb417346b78ed236e095f93f959d",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
