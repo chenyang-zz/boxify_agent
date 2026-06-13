@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.application.services.auth_service import AuthService
+from app.domain.models.health_status import HealthStatus
 from app.domain.models.user import User
 from app.interfaces.service_dependencies import get_auth_service, get_status_service
 from app.main import app
@@ -108,9 +109,38 @@ def test_status_is_public_and_business_routes_require_token():
     app.dependency_overrides.clear()
 
 
+def test_status_returns_500_when_elasticsearch_checker_fails():
+    app.dependency_overrides[get_status_service] = lambda: FakeStatusService(
+        [
+            HealthStatus(service="postgres", status="ok"),
+            HealthStatus(service="redis", status="ok"),
+            HealthStatus(
+                service="elasticsearch",
+                status="error",
+                details="Elasticsearch服务Ping失败",
+            ),
+        ]
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["code"] == 500
+    assert payload["msg"] == "系统存在服务异常"
+    assert payload["data"][2]["service"] == "elasticsearch"
+    assert payload["data"][2]["status"] == "error"
+    app.dependency_overrides.clear()
+
+
 class FakeStatusService:
+    def __init__(self, statuses=None):
+        self._statuses = statuses or []
+
     async def check_all(self):
-        return []
+        return self._statuses
+
 
 
 class InMemoryUserRepository:

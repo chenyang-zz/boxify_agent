@@ -27,6 +27,9 @@ from app.bootstrap.notebook import (
 from app.domain.external.knowledge_search import KnowledgeSearch
 from app.domain.models.user import User
 from app.infrastructure.external.file_storage.cos_file_storage import CosFileStorage
+from app.infrastructure.external.health_checker.elasticsearch_health_checker import (
+    ElasticsearchHealthChecker,
+)
 from app.infrastructure.external.health_checker.postgres_health_checker import (
     PostgresHealthChecker,
 )
@@ -42,6 +45,10 @@ from app.infrastructure.repositories.file_app_config_repository import (
 from app.infrastructure.sandbox.docker_sandbox import DockerSandbox
 from app.infrastructure.search.bing_search import BingSearchEngine
 from app.infrastructure.storage.cos import Cos, get_cos
+from app.infrastructure.storage.elasticsearch import (
+    KnowledgeElasticsearch,
+    get_elasticsearch,
+)
 from app.infrastructure.storage.postgres import get_db_session, get_uow
 from app.infrastructure.storage.redis import RedisClient, get_redis
 from core.config import get_settings
@@ -110,15 +117,19 @@ def get_app_config_bootstrap_service() -> AppConfigBootstrapService:
 def get_status_service(
     db_session: AsyncSession = Depends(get_db_session),
     redis_client: RedisClient = Depends(get_redis),
+    elasticsearch: KnowledgeElasticsearch = Depends(get_elasticsearch),
 ) -> StatusService:
     """获取状态服务"""
-    # 1.初始化postgres和redis状态检查
+    # 1.初始化基础设施状态检查
     postgres_checker = PostgresHealthChecker(db_session)
     redis_checker = RedisHealthChecker(redis_client)
+    elasticsearch_checker = ElasticsearchHealthChecker(elasticsearch)
 
     # 2.创建服务并返回
     logger.info("加载获取StatusService")
-    return StatusService(checkers=[postgres_checker, redis_checker])
+    return StatusService(
+        checkers=[postgres_checker, redis_checker, elasticsearch_checker]
+    )
 
 
 def get_file_service(
