@@ -37,8 +37,18 @@ class DocumentParser:
     @staticmethod
     def _parse_pdf(content: bytes) -> str:
         """从 PDF 页面中提取文本，保留页之间的换行边界。"""
-        with pymupdf.Document(stream=content, filetype="pdf") as doc:
-            return "\n".join(page.get_text() for page in doc)
+        if not content:
+            raise ValueError("PDF内容为空")
+
+        if not content.startswith(b"%PDF"):
+            raise ValueError("文件内容不是合法PDF")
+
+        try:
+            with pymupdf.Document(stream=content, filetype="pdf") as doc:
+                return "\n".join(page.get_text() for page in doc)
+
+        except pymupdf.FileDataError as e:
+            raise ValueError("PDF文件损坏或内容不完整，无法解析") from e
 
     @staticmethod
     def _parse_docx(content: bytes) -> str:

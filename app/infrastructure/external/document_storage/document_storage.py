@@ -3,6 +3,8 @@ from starlette.concurrency import run_in_threadpool
 from app.domain.external.document_storage import DocumentStorage
 from app.infrastructure.storage.cos import Cos
 
+_READ_CHUNK_SIZE = 1024 * 1024
+
 
 class CosDocumentStorage(DocumentStorage):
     """基于 COS 的知识库文档原文件存储适配器。"""
@@ -28,7 +30,7 @@ class CosDocumentStorage(DocumentStorage):
             Key=key,
         )
         body = response["Body"]
-        return await run_in_threadpool(body.read)
+        return await run_in_threadpool(self._read_body_to_bytes, body)
 
     async def delete(self, key: str) -> None:
         """删除 COS 对象；幂等容错由上层业务服务处理。"""
@@ -37,3 +39,14 @@ class CosDocumentStorage(DocumentStorage):
             Bucket=self._bucket,
             Key=key,
         )
+
+    @classmethod
+    def _read_body_to_bytes(cls, body) -> bytes:
+        """将 COS 返回的同步二进制流完整读取为 bytes。"""
+        chunks = []
+        while True:
+            chunk = body.read(_READ_CHUNK_SIZE)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks)

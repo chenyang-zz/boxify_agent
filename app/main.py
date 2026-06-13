@@ -71,11 +71,8 @@ async def lifespan(app: FastAPI):
     await get_redis().init()
     await get_postgres().init()
     await get_cos().init()
-    try:
-        await get_elasticsearch().init()
-        await ensure_knowledge_index()
-    except Exception as e:
-        logger.warning("Notebook Elasticsearch初始化失败: %s", e)
+    await get_elasticsearch().init()
+    await ensure_knowledge_index()
 
     auth_service = get_auth_service()
     created_admin = await auth_service.bootstrap_admin(

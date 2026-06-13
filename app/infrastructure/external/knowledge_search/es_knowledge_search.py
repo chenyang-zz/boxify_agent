@@ -14,6 +14,11 @@ from core.config import get_settings
 _VECTOR_WEIGHT = 0.6
 _BM25_WEIGHT = 0.4
 CHUNKS_INDEX = "boxify_notebook_chunks"
+_IK_PLUGIN_NAME = "analysis-ik"
+_IK_PLUGIN_INSTALL_HINT = (
+    "elasticsearch-plugin install "
+    "https://get.infini.cloud/elasticsearch/analysis-ik/8.17.0"
+)
 
 
 class ESKnowledgeSearch(KnowledgeSearch):
@@ -149,12 +154,39 @@ class ESKnowledgeSearch(KnowledgeSearch):
 
     async def ensure_index(self) -> None:
         """确保知识库 chunk 索引存在。"""
+        await self._ensure_required_plugins()
         if await self._client.indices.exists(index=CHUNKS_INDEX):
             return
         await self._client.indices.create(
             index=CHUNKS_INDEX,
             body=self._build_chunks_index_body(self._settings.notebook_embedding_dims),
         )
+
+    async def _ensure_required_plugins(self) -> None:
+        """确认所有 ES 节点都安装 IK 分词插件，避免创建索引时才暴露模糊错误。"""
+        nodes_info = await self._client.nodes.info(metric="plugins")
+        nodes = nodes_info.get("nodes", {})
+        if not nodes:
+            raise RuntimeError(
+                "无法获取Elasticsearch节点插件信息，无法确认是否安装"
+                f"{_IK_PLUGIN_NAME}插件。请检查ES节点状态。"
+            )
+
+        missing_nodes = []
+        for node_id, node_info in nodes.items():
+            plugin_names = {
+                plugin.get("name") for plugin in node_info.get("plugins", [])
+            }
+            if _IK_PLUGIN_NAME not in plugin_names:
+                missing_nodes.append(node_info.get("name") or node_id)
+
+        if missing_nodes:
+            raise RuntimeError(
+                f"Notebook Elasticsearch缺少{_IK_PLUGIN_NAME}插件，"
+                f"缺失节点: {', '.join(missing_nodes)}。"
+                f"请在每个ES节点执行: {_IK_PLUGIN_INSTALL_HINT}，"
+                "并重启Elasticsearch。"
+            )
 
     async def save_chunks(self, chunks: list[KnowledgeChunk]) -> None:
         """批量保存领域层 chunk 到 Elasticsearch。"""

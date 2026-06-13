@@ -1,8 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
-
-from app.domain.models.knowledge import KnowledgeSearchHit as KnowledgeSearchHit
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NotebookDocumentResponse(BaseModel):
@@ -43,6 +41,19 @@ class KnowledgeSearchRequest(BaseModel):
     query: str = Field(min_length=1)
     top_k: int = Field(default=5, ge=1, le=20)
     tags: list[str] | None = None
+
+
+class KnowledgeSearchHitResponse(BaseModel):
+    """知识库检索命中响应模型。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    chunk_id: str
+    content: str
+    doc_name: str | None = None
+    source_id: str | None = None
+    source_type: str | None = None
+    score: float
 
 
 class NotebookTagResponse(BaseModel):

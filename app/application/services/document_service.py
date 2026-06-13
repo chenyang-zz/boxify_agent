@@ -10,6 +10,7 @@ from app.domain.external.web_crawler import WebCrawler
 from app.domain.models.document import Document
 from app.domain.models.knowledge import KnowledgeSearchHit
 from app.domain.repositories.vow import IUnitOfWork
+from app.utils.hash import content_digest
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,12 @@ class DocumentService:
         document.file_key = f"notebook/{self._user_id}/{document.id}{ext}"
         # 外部对象存储不放进数据库事务，避免上传耗时占用连接和锁。
         await self._storage.save(document.file_key, content)
+        logger.info(
+            "Notebook文档上传完成: document_id=%s file_size=%s sha256=%s",
+            document.id,
+            document.file_size,
+            content_digest(content),
+        )
         async with self._uow_factory() as uow:
             await uow.document.save(document)
         await self._task_dispatcher.dispatch_parse_document(document.id)

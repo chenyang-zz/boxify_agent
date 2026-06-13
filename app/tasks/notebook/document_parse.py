@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from app.bootstrap.notebook import (
     build_document_storage,
@@ -12,6 +13,9 @@ from app.domain.services.notebook.parser import DocumentParser
 from app.infrastructure.storage.cos import get_cos
 from app.infrastructure.storage.elasticsearch import get_elasticsearch
 from app.infrastructure.storage.postgres import get_postgres, get_uow
+from app.utils.hash import content_digest
+
+logger = logging.getLogger(__name__)
 
 
 async def _run(document_id: str) -> None:
@@ -34,6 +38,15 @@ async def _run(document_id: str) -> None:
         embedding_client = await build_embedding_model(document.user_id)
         knowledge_search = await build_knowledge_search(document.user_id)
         content = await storage.get(document.file_key)
+        _ensure_content_matches_document(document, content)
+        logger.info(
+            "Notebook文档原文件读取完成: document_id=%s expected_size=%s "
+            "actual_size=%s sha256=%s",
+            document.id,
+            document.file_size,
+            len(content),
+            content_digest(content),
+        )
         text = DocumentParser.parse(document.file_ext, content)
         if not text.strip():
             raise ValueError("解析结果为空")
@@ -78,6 +91,7 @@ async def _run(document_id: str) -> None:
             document.mark_done(chunk_total)
             await uow.document.save(document)
     except Exception as e:
+        logger.error(f"解析文档失败: {str(e)}", exc_info=True)
         async with get_uow() as uow:
             document = await uow.document.get_by_id(document_id)
             if document:
@@ -95,3 +109,13 @@ def parse_document_task(document_id: str) -> str:
     """Celery 任务入口，任务名保持稳定供派发器引用。"""
     asyncio.run(_run(document_id))
     return document_id
+
+
+def _ensure_content_matches_document(document, content: bytes) -> None:
+    """确保后台读取到的原文件大小与上传记录一致，提前暴露截断问题。"""
+    actual_size = len(content)
+    if actual_size != document.file_size:
+        raise ValueError(
+            "文档原文件读取大小异常: "
+            f"上传记录={document.file_size} bytes, COS读取={actual_size} bytes"
+        )
