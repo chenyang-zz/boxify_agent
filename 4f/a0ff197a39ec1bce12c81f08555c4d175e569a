@@ -1,0 +1,30 @@
+tests/test_status_service.py
+  s_44b7f7a2f18bd5::t_be216b8fe211c7 1-86
+tests/test_auth_api.py
+  s_44b7f7a2f18bd5::t_5865e2f4441637 4,112-136,138-140,142-143
+app/interfaces/service_dependencies.py
+  s_44b7f7a2f18bd5::t_00f1238b401a61 30-32,48-51,120,123,126,130-132
+app/infrastructure/external/health_checker/elasticsearch_health_checker.py
+  s_44b7f7a2f18bd5::t_b2e9e720f64be7 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4fa0ff197a39ec1bce12c81f08555c4d175e569a",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
