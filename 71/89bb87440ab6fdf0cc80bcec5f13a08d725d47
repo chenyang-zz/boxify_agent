@@ -1,0 +1,252 @@
+app/tasks/notebook/__init__.py
+  s_44b7f7a2f18bd5::t_aae859d933a224 1
+app/infrastructure/external/document_storage/document_storage.py
+  s_44b7f7a2f18bd5::t_d44c5d88a7fbfe 1-7,9-14,16-23,25-33,35-39
+  s_44b7f7a2f18bd5::t_497c7229acf06c 8,15,24,34
+app/domain/external/task_dispatcher.py
+  s_44b7f7a2f18bd5::t_f37a1322b7e46c 8
+  s_44b7f7a2f18bd5::t_d44c5d88a7fbfe 1-7,9
+app/infrastructure/external/web_crawler/http_web_crawler.py
+  s_44b7f7a2f18bd5::t_5bd6eb4ee0a97b 8,11,26
+  s_44b7f7a2f18bd5::t_0e100fe0f4c530 1-7,9-10,12-25,27-30
+app/interfaces/endpoints/session_routes.py
+  s_44b7f7a2f18bd5::t_45e1d26ff35d55 12
+app/application/security/app_config_encryption.py
+  s_44b7f7a2f18bd5::t_067a8b96e368be 37-41,63-67,107-110
+app/domain/models/app_config.py
+  s_44b7f7a2f18bd5::t_067a8b96e368be 18-33,117,130
+app/domain/repositories/vow.py
+  s_44b7f7a2f18bd5::t_271f89dab86f6c 13,16
+  s_44b7f7a2f18bd5::t_71f648abe2dcc8 25-26
+app/domain/repositories/tag_repository.py
+  s_44b7f7a2f18bd5::t_3954306808da7f 7,11,16,21,26
+  s_44b7f7a2f18bd5::t_b56796705d6f06 3
+  s_44b7f7a2f18bd5::t_fd39cfb89468e0 1-2,4-6,8-10,12-15,17-20,22-25,27
+app/infrastructure/models/document.py
+  s_44b7f7a2f18bd5::t_b97452bdef888c 1-21,23-57,59-61,63-65,67-68
+  s_44b7f7a2f18bd5::t_4ecdf3f3042345 22,58,62,66
+app/infrastructure/external/task_dispatcher/celery_task_dispatcher.py
+  s_44b7f7a2f18bd5::t_8b7e6a9058d150 5,8
+  s_44b7f7a2f18bd5::t_aae859d933a224 9
+  s_44b7f7a2f18bd5::t_d44c5d88a7fbfe 1-4,6-7,10-11
+core/config.py
+  s_44b7f7a2f18bd5::t_067a8b96e368be 43-53
+app/interfaces/endpoints/routes.py
+  s_44b7f7a2f18bd5::t_34adf4be4fd475 5-8,10-12
+  s_44b7f7a2f18bd5::t_385f16d71ac668 9,28
+app/infrastructure/models/app_config.py
+  s_44b7f7a2f18bd5::t_067a8b96e368be 37-39,72
+app/domain/models/web_page.py
+  s_44b7f7a2f18bd5::t_0e100fe0f4c530 1-8
+.env.example
+  s_44b7f7a2f18bd5::t_562d0f543704bf 16-19,21-24,27-28
+  h_e1f1392360ad67 20,25-26
+app/domain/models/document.py
+  s_44b7f7a2f18bd5::t_65b6ec61f9f05b 26,51,70,82,88,94,101
+  s_44b7f7a2f18bd5::t_b97452bdef888c 1-25,27-50,52-69,71-81,83-87,89-93,95-100,102-103
+app/interfaces/endpoints/notebook/tags.py
+  s_44b7f7a2f18bd5::t_d22534e9ebe87c 8
+  s_44b7f7a2f18bd5::t_7b42021f4abb72 15
+  s_44b7f7a2f18bd5::t_385f16d71ac668 1-7,9-14,16-19
+tests/test_user_app_config.py
+  s_44b7f7a2f18bd5::t_8f34c9c8fafb18 13-14,81-113,242
+app/domain/external/web_crawler.py
+  s_44b7f7a2f18bd5::t_0e100fe0f4c530 1-11
+app/domain/services/notebook/chunker.py
+  s_44b7f7a2f18bd5::t_31715167a84222 1-2,4,6-7,10-13,16,66
+  s_44b7f7a2f18bd5::t_cfa7857ed9f836 8-9,15,28,69
+  s_44b7f7a2f18bd5::t_0b967b840118bb 3,5,17-19,42-65
+  s_44b7f7a2f18bd5::t_852b7068bcbe0a 14,20-27,29-41,67-68,70-80
+app/interfaces/schemas/notebook.py
+  s_44b7f7a2f18bd5::t_34adf4be4fd475 1-4,6,8,11-25,28-34,37-39,43-48,51-52
+  s_44b7f7a2f18bd5::t_7e64264fc5ad43 40
+  s_44b7f7a2f18bd5::t_cbf12b38bc3624 9-10,26-27,35-36,41-42,49-50
+  s_44b7f7a2f18bd5::t_a5f9b9e90fd3e4 5
+  s_44b7f7a2f18bd5::t_8e38179c6254da 7
+app/infrastructure/external/knowledge_search/es_knowledge_search.py
+  s_44b7f7a2f18bd5::t_c97eb04374eab7 8,31,38,54,121-128,134,159-161,165-166,168-171,174,177-190
+  s_44b7f7a2f18bd5::t_c7a9a3be50ff16 10,16,59,66,79,135,150-152,155-156,167,222,239-269
+  s_44b7f7a2f18bd5::t_40291682ce6a1a 41,148
+  s_44b7f7a2f18bd5::t_ef7b4f86b90664 20,39,55,101,133,193,203,217
+  h_e1f1392360ad67 1-4,6,9,11-12,14-15,17-18,24-25,28-30,40,47-53,56-58,60-65,67-78,80-100,102-120,129-131,136-147,153-154,157-158,162-164,172-173,175-176,191,200-202,204-216,218-221,223-238
+  s_44b7f7a2f18bd5::t_0cabe4bf867da8 5,7,13,19,21-23,26-27,32-37,42-46,132,149,192,194-199
+app/infrastructure/storage/redis.py
+  h_e1f1392360ad67 24
+app/domain/models/knowledge.py
+  h_e1f1392360ad67 20-21
+  s_44b7f7a2f18bd5::t_ca884842150111 1-19,22-36
+app/application/services/document_service.py
+  s_44b7f7a2f18bd5::t_1fca0099ee0160 1-5,7,12-20,22-26,29-30,32-41,43-55,57-63,65-66,69-70,72-76,78-86,88-91,93-96,98-105,107-119,122-131,133-149,151-154
+  s_44b7f7a2f18bd5::t_0e100fe0f4c530 9,31,67-68,71
+  s_44b7f7a2f18bd5::t_71c6ba894065c0 11,120
+  s_44b7f7a2f18bd5::t_b56796705d6f06 10
+  s_44b7f7a2f18bd5::t_07405704e4f6ec 21,42,56,64,77,87,92,97,106,121,132,150
+  s_44b7f7a2f18bd5::t_0c1ea10feb48fe 6,8,27-28
+app/domain/models/tag.py
+  s_44b7f7a2f18bd5::t_b97452bdef888c 1-14
+alembic/versions/4f9d2b7a6c10_create_documents_tags_tables.py
+  s_44b7f7a2f18bd5::t_4751702b34e944 1-20,22-30,32-113
+  s_44b7f7a2f18bd5::t_9f2b7a5d43367e 21,31
+app/interfaces/endpoints/notebook/__init__.py
+  s_44b7f7a2f18bd5::t_385f16d71ac668 1-5,8-9
+  s_44b7f7a2f18bd5::t_f19d1f5ab30b24 6
+  s_44b7f7a2f18bd5::t_d22534e9ebe87c 7
+app/infrastructure/storage/elasticsearch.py
+  h_e1f1392360ad67 6,30,46,48
+  s_44b7f7a2f18bd5::t_f487c61a4ea50f 7,14,31,39,47
+  s_44b7f7a2f18bd5::t_0fb6f2f0e92418 1-5,8-13,15-29,32-38,40-45
+tests/test_app_config_encryption.py
+  s_44b7f7a2f18bd5::t_7aed0edc8c031c 14-15,37-39,48,50-52,66-69
+app/main.py
+  s_44b7f7a2f18bd5::t_d22534e9ebe87c 53-58
+  s_44b7f7a2f18bd5::t_e9a6361b6ea819 8,76
+  h_e1f1392360ad67 11,114
+  s_44b7f7a2f18bd5::t_0fb6f2f0e92418 75
+  s_44b7f7a2f18bd5::t_07c9ea965df49a 52,59,74,77-78
+app/infrastructure/repositories/db_tag_repository.py
+  s_44b7f7a2f18bd5::t_e2f1df616dd2f7 11,17,23,33,49
+  s_44b7f7a2f18bd5::t_fd39cfb89468e0 1-3,5,8-10,12-16,18-22,24-32,34-48,50-55
+  s_44b7f7a2f18bd5::t_b56796705d6f06 4,6-7
+app/tasks/notebook/document_parse.py
+  s_44b7f7a2f18bd5::t_ab4ffb34242554 48,52,60,64
+  s_44b7f7a2f18bd5::t_c1b58f818bd472 18,26,44,71,87,95
+  s_44b7f7a2f18bd5::t_abc3fce0885f30 45,55,59,67,73
+  s_44b7f7a2f18bd5::t_c74b47378a7e03 10-11,37,40
+  s_44b7f7a2f18bd5::t_aae859d933a224 1-2,12,14-17,19-20,25,27-33,36,38-39,41-43,46-47,49-51,53-54,56-58,61-63,65-66,68-70,74-86,89-94,96-97
+  s_44b7f7a2f18bd5::t_0fb6f2f0e92418 21
+  s_44b7f7a2f18bd5::t_e35482d98f5ed7 3-8,22-23,34-35
+  h_e1f1392360ad67 9,13,24,72,88
+app/celery_app.py
+  h_e1f1392360ad67 9
+  s_44b7f7a2f18bd5::t_55d7fa158cefb0 7
+  s_44b7f7a2f18bd5::t_31715167a84222 1-6,8,10-11,13
+  s_44b7f7a2f18bd5::t_aae859d933a224 12
+app/infrastructure/external/embedding/__init__.py
+  s_44b7f7a2f18bd5::t_02d47cd74dd6db 1-3
+app/infrastructure/external/embedding/openai_embedding.py
+  s_44b7f7a2f18bd5::t_28cae3d9073d3b 17-18,20-21
+  s_44b7f7a2f18bd5::t_02d47cd74dd6db 1-7,9-16,22,24-30,32
+  s_44b7f7a2f18bd5::t_0a79bf68662020 8,19,23,31
+app/infrastructure/external/web_crawler/__init__.py
+  s_44b7f7a2f18bd5::t_0e100fe0f4c530 1-3
+app/bootstrap/__init__.py
+  s_44b7f7a2f18bd5::t_40fa7115a26d08 1
+app/bootstrap/notebook.py
+  s_44b7f7a2f18bd5::t_d31a154b789fc7 73
+  s_44b7f7a2f18bd5::t_d70b59c516a534 25-38,71
+  s_44b7f7a2f18bd5::t_6623d95df91108 1-24,39-70,72
+app/infrastructure/repositories/db_uow.py
+  s_44b7f7a2f18bd5::t_271f89dab86f6c 17,20
+  s_44b7f7a2f18bd5::t_4751702b34e944 63-64
+tests/test_notebook_api.py
+  s_44b7f7a2f18bd5::t_56fe0266108cc8 44,108
+  s_44b7f7a2f18bd5::t_b56796705d6f06 8,10
+  s_44b7f7a2f18bd5::t_ba47838c126899 254-255
+  s_44b7f7a2f18bd5::t_605be0b715d705 2,89
+  s_44b7f7a2f18bd5::t_c0f8124955150a 97-100
+  s_44b7f7a2f18bd5::t_86a10d7a0f0007 253
+  s_44b7f7a2f18bd5::t_632cb8a8c1cfdd 214,218-220
+  s_44b7f7a2f18bd5::t_6ca645a075a893 39,42-43,45
+  s_44b7f7a2f18bd5::t_89041e3edf1a91 71-84
+  s_44b7f7a2f18bd5::t_4940e92af18741 252,256-257,261-264
+  s_44b7f7a2f18bd5::t_5fe4cd83f27721 9,114,235,245-248
+  s_44b7f7a2f18bd5::t_e99f4fdcef95af 40-41
+  s_44b7f7a2f18bd5::t_85565f34736166 7,85-88,91-92,94-96,104-106,109-113,115-116,135,137,229-234,236-244,249-251
+  s_44b7f7a2f18bd5::t_8f34c9c8fafb18 1,3-4,11-38,46-70,141-195,197-198,200-213,215-217,221-228
+  s_44b7f7a2f18bd5::t_55f657fbfa5491 5-6,90,93,101-103,107,117-134,136,138-140,196,199,258-260,265
+app/application/services/tag_service.py
+  s_44b7f7a2f18bd5::t_bebc734f228326 5,12,17
+  s_44b7f7a2f18bd5::t_b56796705d6f06 1
+  s_44b7f7a2f18bd5::t_1fca0099ee0160 2-4,6-11,13-16,18-19
+app/infrastructure/repositories/db_document_repository.py
+  s_44b7f7a2f18bd5::t_b56796705d6f06 4,6-8
+  s_44b7f7a2f18bd5::t_f253fddd813a00 12,18,28,33,45,74,79
+  s_44b7f7a2f18bd5::t_fd39cfb89468e0 1-3,5,9-11,13-17,19-27,29-32,34-44,46-73,75-78,80-82
+app/domain/services/notebook/__init__.py
+  s_44b7f7a2f18bd5::t_31715167a84222 1
+app/domain/external/knowledge_search.py
+  h_e1f1392360ad67 1-2,4,6,27
+  s_44b7f7a2f18bd5::t_2fc27721ef96ce 17,22,24-26,29-30
+  s_44b7f7a2f18bd5::t_76f3a23ae6fbe0 3,5,16,18-21
+  s_44b7f7a2f18bd5::t_70496157013a17 28
+  s_44b7f7a2f18bd5::t_7e64264fc5ad43 7-15,23
+app/domain/services/notebook/parser.py
+  s_44b7f7a2f18bd5::t_55bc3b2be014d3 12,18,39,45
+  s_44b7f7a2f18bd5::t_31715167a84222 2-3,6-7,9
+  s_44b7f7a2f18bd5::t_852b7068bcbe0a 11,13-17,19,21-30,35-38,41-44,47
+  h_e1f1392360ad67 1,4-5,8,10,20,31-34,40,46
+app/infrastructure/models/__init__.py
+  s_44b7f7a2f18bd5::t_b56796705d6f06 6-8
+  s_44b7f7a2f18bd5::t_4751702b34e944 16-18
+app/tasks/__init__.py
+  s_44b7f7a2f18bd5::t_31715167a84222 1
+app/infrastructure/external/task_dispatcher/__init__.py
+  s_44b7f7a2f18bd5::t_d44c5d88a7fbfe 1-3
+app/interfaces/endpoints/notebook/documents.py
+  s_44b7f7a2f18bd5::t_8bfc7d1bf7203e 21,37,52,70,80,90,103,113
+  s_44b7f7a2f18bd5::t_385f16d71ac668 1-12,14-20,22-36,38-51,53-69,71-79,81-89,91-102,104-112,114
+  s_44b7f7a2f18bd5::t_d22534e9ebe87c 13
+  s_44b7f7a2f18bd5::t_e12a61637d8c9e 115
+app/domain/external/embedding.py
+  s_44b7f7a2f18bd5::t_28cae3d9073d3b 14-16,18
+  s_44b7f7a2f18bd5::t_32fa9bbb86a30c 1-7,9-11,13
+  s_44b7f7a2f18bd5::t_4b413886e5ae3a 8,12,17
+app/application/services/app_config_service.py
+  s_44b7f7a2f18bd5::t_067a8b96e368be 12,59-77
+app/infrastructure/external/knowledge_search/__init__.py
+  s_44b7f7a2f18bd5::t_0cabe4bf867da8 1-2
+  s_44b7f7a2f18bd5::t_0e100fe0f4c530 3
+app/infrastructure/external/document_storage/__init__.py
+  s_44b7f7a2f18bd5::t_d44c5d88a7fbfe 1-3
+app/interfaces/endpoints/app_config_routes.py
+  s_44b7f7a2f18bd5::t_07c9ea965df49a 12,57-85
+tests/test_notebook_repository.py
+  s_44b7f7a2f18bd5::t_8f34c9c8fafb18 1-2,4-49
+  s_44b7f7a2f18bd5::t_b56796705d6f06 3
+app/interfaces/service_dependencies.py
+  s_44b7f7a2f18bd5::t_de463515033ef0 20-26,145,150,157,160-161,164,169
+  s_44b7f7a2f18bd5::t_64e440f267dfa3 142-143,146-147,151-152,165-166,173,189-192
+  s_44b7f7a2f18bd5::t_271f89dab86f6c 15,19,172,174-180,183,186-188,193
+  s_44b7f7a2f18bd5::t_deb777e429ab7b 167-168,185
+  s_44b7f7a2f18bd5::t_909219b044f496 162
+  s_44b7f7a2f18bd5::t_07c9ea965df49a 170-171,195
+  h_e1f1392360ad67 27,153-156,158-159,163
+  s_44b7f7a2f18bd5::t_0c1ea10feb48fe 141,144,148-149,181-182
+  s_44b7f7a2f18bd5::t_56fe0266108cc8 184,194
+pyproject.toml
+  s_44b7f7a2f18bd5::t_07c9ea965df49a 13,17,28,33
+app/domain/external/document_storage.py
+  s_44b7f7a2f18bd5::t_d44c5d88a7fbfe 1-7,9-11,13-15,17
+  s_44b7f7a2f18bd5::t_3213c123fa1fef 8,12,16
+app/domain/repositories/document_repository.py
+  s_44b7f7a2f18bd5::t_b56796705d6f06 3
+  s_44b7f7a2f18bd5::t_862351f7d1fd1f 7,11,16,21,28,33
+  s_44b7f7a2f18bd5::t_fd39cfb89468e0 1-2,4-6,8-10,12-15,17-20,22-27,29-32,34
+app/infrastructure/models/tag.py
+  s_44b7f7a2f18bd5::t_4cbea7f5f5195a 20,46,50
+  s_44b7f7a2f18bd5::t_b97452bdef888c 1-19,21-45,47-49,51
+app/infrastructure/models/document_tag.py
+  s_44b7f7a2f18bd5::t_b97452bdef888c 1-7,9-28
+  s_44b7f7a2f18bd5::t_d0a649fdf70453 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7189bb87440ab6fdf0cc80bcec5f13a08d725d47",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
