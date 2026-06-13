@@ -2,7 +2,14 @@ from fastapi import APIRouter, Depends
 
 from app.interfaces.service_dependencies import require_active_user, require_bearer_token
 
-from . import app_config_routes, auth_routes, file_route, session_routes, status_routes
+from . import (
+    app_config_routes,
+    auth_routes,
+    file_route,
+    notebook,
+    session_routes,
+    status_routes,
+)
 
 
 def create_api_routes() -> APIRouter:
@@ -18,6 +25,7 @@ def create_api_routes() -> APIRouter:
         app_config_routes.router, dependencies=protected_dependencies
     )
     api_router.include_router(file_route.router, dependencies=protected_dependencies)
+    api_router.include_router(notebook.router, dependencies=protected_dependencies)
     api_router.include_router(
         session_routes.router, dependencies=protected_dependencies
     )

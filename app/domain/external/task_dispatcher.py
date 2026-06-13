@@ -1,0 +1,9 @@
+from typing import Protocol
+
+
+class TaskDispatcher(Protocol):
+    """知识库后台任务派发协议"""
+
+    async def dispatch_parse_document(self, document_id: str) -> None:
+        """派发文档解析任务，调用方不关心具体队列实现。"""
+        ...

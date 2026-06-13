@@ -34,6 +34,9 @@ class AppConfigModel(Base):
     a2a_config: Mapped[Dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
+    notebook_config: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         nullable=False,
@@ -66,6 +69,7 @@ class AppConfigModel(Base):
             "agent_config": self.agent_config,
             "mcp_config": self.mcp_config,
             "a2a_config": self.a2a_config,
+            "notebook_config": self.notebook_config,
         }
         if encryption:
             app_config_data = encryption.decrypt_app_config_data(app_config_data)

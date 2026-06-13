@@ -11,6 +11,8 @@ from app.domain.models.app_config import (
     LLMConfig,
     MCPConfig,
     MCPServerConfig,
+    NotebookConfig,
+    NotebookEmbeddingConfig,
 )
 from app.infrastructure.repositories.db_app_config_repository import (
     DBAppConfigRepository,
@@ -32,6 +34,9 @@ def test_app_config_encryption_encrypts_and_decrypts_sensitive_fields():
             }
         ),
         a2a_config=A2AConfig(),
+        notebook_config=NotebookConfig(
+            embedding_config=NotebookEmbeddingConfig(api_key="embedding-secret")
+        ),
     )
 
     encrypted_data = encryption.encrypt_app_config(app_config)
@@ -40,7 +45,11 @@ def test_app_config_encryption_encrypts_and_decrypts_sensitive_fields():
     assert "llm-secret" not in encrypted_json
     assert "mcp-secret" not in encrypted_json
     assert "env-secret" not in encrypted_json
+    assert "embedding-secret" not in encrypted_json
     assert encrypted_data["llm_config"]["api_key"].startswith("enc:v1:")
+    assert encrypted_data["notebook_config"]["embedding_config"][
+        "api_key"
+    ].startswith("enc:v1:")
     server_data = encrypted_data["mcp_config"]["mcpServers"]["demo"]
     assert server_data["headers"].startswith("enc:v1:")
     assert server_data["env"].startswith("enc:v1:")
@@ -54,6 +63,10 @@ def test_app_config_encryption_encrypts_and_decrypts_sensitive_fields():
     assert decrypted_config.mcp_config.mcpServers["demo"].env == {
         "TOKEN": "env-secret"
     }
+    assert (
+        decrypted_config.notebook_config.embedding_config.api_key
+        == "embedding-secret"
+    )
 
 
 def test_app_config_encryption_accepts_plain_secret_key():

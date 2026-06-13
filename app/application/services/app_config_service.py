@@ -9,6 +9,7 @@ from app.domain.models.app_config import (
     AppConfig,
     LLMConfig,
     MCPConfig,
+    NotebookEmbeddingConfig,
 )
 from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.tools.a2a import A2AClientManager
@@ -54,6 +55,26 @@ class AppConfigService:
             await uow.app_config.save(self._user_id, app_config)
 
             return app_config.llm_config
+
+    async def get_notebook_embedding_config(self) -> NotebookEmbeddingConfig:
+        """获取Notebook知识库Embedding配置"""
+        async with self._uow_factory() as uow:
+            app_config = await self._load_app_config(uow)
+            return app_config.notebook_config.embedding_config
+
+    async def update_notebook_embedding_config(
+        self, embedding_config: NotebookEmbeddingConfig
+    ) -> NotebookEmbeddingConfig:
+        """更新Notebook知识库Embedding配置"""
+        async with self._uow_factory() as uow:
+            app_config = await self._load_app_config(uow)
+            if not embedding_config.api_key.strip():
+                embedding_config.api_key = (
+                    app_config.notebook_config.embedding_config.api_key
+                )
+            app_config.notebook_config.embedding_config = embedding_config
+            await uow.app_config.save(self._user_id, app_config)
+            return app_config.notebook_config.embedding_config
 
     async def get_agent_config(self) -> AgentConfig:
         """获取Agent通用配置"""

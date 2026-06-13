@@ -15,6 +15,22 @@ class LLMConfig(BaseModel):
     max_tokens: int = Field(default=200 * 1024, ge=0)  # 最大输出token数
 
 
+class NotebookEmbeddingConfig(BaseModel):
+    """Notebook知识库Embedding模型配置"""
+
+    base_url: str = "https://api.openai.com/v1"
+    api_key: str = ""
+    model_name: str = "text-embedding-3-small"
+
+
+class NotebookConfig(BaseModel):
+    """Notebook知识库配置"""
+
+    embedding_config: NotebookEmbeddingConfig = Field(
+        default_factory=NotebookEmbeddingConfig
+    )
+
+
 class AgentConfig(BaseModel):
     """Agent通用配置"""
 
@@ -98,6 +114,7 @@ class AppConfig(BaseModel):
     agent_config: AgentConfig  # Agent通用配置
     mcp_config: MCPConfig  # MCP配置
     a2a_config: A2AConfig  # A2A服务配置
+    notebook_config: NotebookConfig = Field(default_factory=NotebookConfig)
 
     # Pydantic配置，允许传递额外的参数初始化
     model_config = ConfigDict(extra="allow")
@@ -110,4 +127,5 @@ def create_default_app_config() -> AppConfig:
         agent_config=AgentConfig(),
         mcp_config=MCPConfig(),
         a2a_config=A2AConfig(),
+        notebook_config=NotebookConfig(),
     )

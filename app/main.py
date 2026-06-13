@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.bootstrap.notebook import ensure_knowledge_index
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.storage.cos import get_cos
+from app.infrastructure.storage.elasticsearch import get_elasticsearch
 from app.infrastructure.storage.postgres import get_postgres
 from app.infrastructure.storage.redis import get_redis
 from app.interfaces.endpoints.routes import router
@@ -47,6 +49,14 @@ openai_tags = [
         "name": "会话模块",
         "description": "包含 **会话创建**、**会话列表**、**会话详情**、**聊天流式响应**、**沙箱文件/终端/VNC** 等接口，用于管理智能体任务会话。",
     },
+    {
+        "name": "Notebook文档模块",
+        "description": "包含 **文档上传**、**网页导入**、**文档列表/详情/状态**、**重试/删除**、**知识库检索** 等接口，用于管理用户独立知识库文档。",
+    },
+    {
+        "name": "Notebook标签模块",
+        "description": "包含 **标签列表** 等接口，用于管理和查询当前用户知识库文档标签。",
+    },
 ]
 
 
@@ -61,6 +71,11 @@ async def lifespan(app: FastAPI):
     await get_redis().init()
     await get_postgres().init()
     await get_cos().init()
+    try:
+        await get_elasticsearch().init()
+        await ensure_knowledge_index()
+    except Exception as e:
+        logger.warning("Notebook Elasticsearch初始化失败: %s", e)
 
     auth_service = get_auth_service()
     created_admin = await auth_service.bootstrap_admin(
@@ -96,6 +111,7 @@ async def lifespan(app: FastAPI):
         await get_redis().shutdown()
         await get_postgres().shutdown()
         await get_cos().shutdown()
+        await get_elasticsearch().shutdown()
 
 
 # 4.创建应用实例

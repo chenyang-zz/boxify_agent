@@ -9,7 +9,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import AsyncGenerator, Dict, Optional, cast
+from typing import AsyncGenerator, Dict, Optional
 
 import websockets
 from fastapi import APIRouter, Depends

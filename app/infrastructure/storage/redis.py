@@ -21,7 +21,7 @@ class RedisClient:
         """完成redis客户端的初始化"""
         # 1.判断客户端是否存在，如果存在则表示已连接上，无需重复连接
         if self._client:
-            logger.warn("Redis客户端已初始化，无需重复操作")
+            logger.warning("Redis客户端已初始化，无需重复操作")
             return
 
         try:

@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     admin_password: str = Field(default="", repr=False)
     app_config_encryption_key: str = Field(default="", repr=False)
 
+    notebook_embedding_dims: int = 1024
+
+    # Elasticsearch配置
+    elasticsearch_url: str = "http://localhost:9200"
+    elasticsearch_username: str = ""
+    elasticsearch_password: str = Field(default="", repr=False)
+    elasticsearch_request_timeout: int = 30
+
+    # Celery配置
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+
     # Sandbox配置
     sandbox_address: Optional[str] = None
     sandbox_image: Optional[str] = None

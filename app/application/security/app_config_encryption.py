@@ -34,6 +34,11 @@ class AppConfigEncryption:
         if api_key:
             llm_config["api_key"] = self._encrypt_text(api_key)
 
+        notebook_embedding_config = self._notebook_embedding_config(data)
+        notebook_api_key = notebook_embedding_config.get("api_key")
+        if notebook_api_key:
+            notebook_embedding_config["api_key"] = self._encrypt_text(notebook_api_key)
+
         for server_config in self._mcp_servers(data).values():
             env = server_config.get("env")
             if env:
@@ -54,6 +59,11 @@ class AppConfigEncryption:
         api_key = llm_config.get("api_key")
         if isinstance(api_key, str) and self._is_encrypted(api_key):
             llm_config["api_key"] = self._decrypt_text(api_key)
+
+        notebook_embedding_config = self._notebook_embedding_config(data)
+        notebook_api_key = notebook_embedding_config.get("api_key")
+        if isinstance(notebook_api_key, str) and self._is_encrypted(notebook_api_key):
+            notebook_embedding_config["api_key"] = self._decrypt_text(notebook_api_key)
 
         for server_config in self._mcp_servers(data).values():
             env = server_config.get("env")
@@ -93,6 +103,11 @@ class AppConfigEncryption:
     def _mcp_servers(app_config_data: Dict[str, Any]) -> Dict[str, Any]:
         mcp_config = app_config_data.get("mcp_config") or {}
         return mcp_config.get("mcpServers") or {}
+
+    @staticmethod
+    def _notebook_embedding_config(app_config_data: Dict[str, Any]) -> Dict[str, Any]:
+        notebook_config = app_config_data.setdefault("notebook_config", {})
+        return notebook_config.setdefault("embedding_config", {})
 
     @staticmethod
     def _normalize_key(encryption_key: str) -> bytes:

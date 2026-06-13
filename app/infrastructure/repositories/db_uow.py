@@ -14,8 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.repositories.vow import IUnitOfWork
 from app.infrastructure.repositories.db_app_config_repository import DBAppConfigRepository
+from app.infrastructure.repositories.db_document_repository import DBDocumentRepository
 from app.infrastructure.repositories.db_file_repository import DBFileRepository
 from app.infrastructure.repositories.db_session_repository import DBSessionRepository
+from app.infrastructure.repositories.db_tag_repository import DBTagRepository
 from app.infrastructure.repositories.db_user_repository import DBUserRepository
 from core.config import get_settings
 
@@ -58,6 +60,8 @@ class DBUnitOfWork(IUnitOfWork):
             db_session=db_session,
             encryption_key=self._settings.app_config_encryption_key,
         )
+        self.document = DBDocumentRepository(db_session=db_session)
+        self.tag = DBTagRepository(db_session=db_session)
         self.file = DBFileRepository(db_session=db_session)
         self.session = DBSessionRepository(db_session=db_session)
         self.user = DBUserRepository(db_session=db_session)

@@ -12,9 +12,19 @@ from app.application.services.app_config_bootstrap_service import (
 )
 from app.application.services.app_config_service import AppConfigService
 from app.application.services.auth_service import AuthService
+from app.application.services.document_service import DocumentService
 from app.application.services.file_service import FileService
 from app.application.services.session_service import SessionService
 from app.application.services.status_service import StatusService
+from app.application.services.tag_service import TagService
+from app.bootstrap.notebook import (
+    build_document_storage,
+    build_embedding_model,
+    build_knowledge_search,
+    build_task_dispatcher,
+    build_web_crawler,
+)
+from app.domain.external.knowledge_search import KnowledgeSearch
 from app.domain.models.user import User
 from app.infrastructure.external.file_storage.cos_file_storage import CosFileStorage
 from app.infrastructure.external.health_checker.postgres_health_checker import (
@@ -125,6 +135,64 @@ def get_file_service(
     return FileService(
         uow_factory=get_uow,
         file_storage=file_storage,
+    )
+
+
+def get_document_storage(
+    cos: Cos = Depends(get_cos),
+):
+    """获取知识库文档原文件存储"""
+    return build_document_storage(cos=cos)
+
+
+def get_task_dispatcher():
+    """获取知识库后台任务派发器"""
+    return build_task_dispatcher()
+
+
+async def get_embedding(
+    current_user: User = Depends(require_active_user),
+):
+    """获取向量模型"""
+    return await build_embedding_model(current_user.id)
+
+
+async def get_knowledge_search(
+    current_user: User = Depends(require_active_user),
+) -> KnowledgeSearch:
+    """获取知识库检索工具"""
+    return await build_knowledge_search(current_user.id)
+
+
+def get_knowledge_web_crawler():
+    """获取知识库网页抓取器"""
+    return build_web_crawler()
+
+
+def get_tag_service(
+    current_user: User = Depends(require_active_user),
+) -> TagService:
+    """获取知识库标签服务"""
+    return TagService(uow_factory=get_uow, user_id=current_user.id)
+
+
+def get_document_service(
+    current_user: User = Depends(require_active_user),
+    storage=Depends(get_document_storage),
+    task_dispatcher=Depends(get_task_dispatcher),
+    tag_service: TagService = Depends(get_tag_service),
+    knowledge_search=Depends(get_knowledge_search),
+    web_crawler=Depends(get_knowledge_web_crawler),
+) -> DocumentService:
+    """获取知识库文档服务"""
+    return DocumentService(
+        uow_factory=get_uow,
+        user_id=current_user.id,
+        storage=storage,
+        task_dispatcher=task_dispatcher,
+        tag_service=tag_service,
+        knowledge_search=knowledge_search,
+        web_crawler=web_crawler,
     )
 
 

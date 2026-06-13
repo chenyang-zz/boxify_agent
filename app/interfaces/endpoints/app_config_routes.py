@@ -9,6 +9,7 @@ from app.domain.models.app_config import (
     AgentConfig,
     LLMConfig,
     MCPConfig,
+    NotebookEmbeddingConfig,
 )
 from app.interfaces.schemas.app_config import (
     ListA2AserverResponse,
@@ -50,6 +51,38 @@ async def update_llm_config(
     return Response.success(
         msg="更新LLM信息配置成功",
         data=updated_llm_config.model_dump(exclude={"api_key"}),
+    )
+
+
+@router.get(
+    path="/notebook/embedding",
+    response_model=Response[NotebookEmbeddingConfig],
+    summary="获取Notebook Embedding配置",
+    description="获取当前用户Notebook知识库Embedding模型配置，不返回api_key",
+)
+async def get_notebook_embedding_config(
+    app_config_service: AppConfigService = Depends(get_app_config_service),
+):
+    embedding_config = await app_config_service.get_notebook_embedding_config()
+    return Response.success(data=embedding_config.model_dump(exclude={"api_key"}))
+
+
+@router.post(
+    path="/notebook/embedding",
+    response_model=Response[NotebookEmbeddingConfig],
+    summary="更新Notebook Embedding配置",
+    description="更新当前用户Notebook Embedding配置，当api_key为空时保留旧值",
+)
+async def update_notebook_embedding_config(
+    embedding_config: NotebookEmbeddingConfig,
+    app_config_service: AppConfigService = Depends(get_app_config_service),
+):
+    updated_config = await app_config_service.update_notebook_embedding_config(
+        embedding_config
+    )
+    return Response.success(
+        msg="更新Notebook Embedding配置成功",
+        data=updated_config.model_dump(exclude={"api_key"}),
     )
 
 

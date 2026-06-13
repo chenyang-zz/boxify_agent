@@ -10,7 +10,6 @@ import httpx
 from async_lru import alru_cache
 from docker.errors import APIError, NotFound
 from docker.models.containers import Container
-from docker.models.resource import Model
 
 from app.domain.external.browser import Browser
 from app.domain.external.llm import LLM

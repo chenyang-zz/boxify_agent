@@ -10,6 +10,8 @@ from app.domain.models.app_config import (
     AppConfig,
     LLMConfig,
     MCPConfig,
+    NotebookConfig,
+    NotebookEmbeddingConfig,
 )
 from app.domain.models.user import User
 from app.main import app
@@ -74,6 +76,39 @@ async def test_update_llm_empty_api_key_preserves_only_current_users_key():
     assert user_a_config.llm_config.model_name == "new-a"
     assert user_b_config.llm_config.api_key == "secret-b"
     assert user_b_config.llm_config.model_name == "old-b"
+
+
+@pytest.mark.anyio
+async def test_update_notebook_embedding_empty_api_key_preserves_current_users_key():
+    app_config_repository = InMemoryAppConfigRepository()
+    await app_config_repository.save(
+        "user-a",
+        AppConfig(
+            llm_config=LLMConfig(),
+            agent_config=AgentConfig(),
+            mcp_config=MCPConfig(),
+            a2a_config=A2AConfig(),
+            notebook_config=NotebookConfig(
+                embedding_config=NotebookEmbeddingConfig(
+                    api_key="embedding-secret-a",
+                    model_name="old-embedding-a",
+                )
+            ),
+        ),
+    )
+    service = AppConfigService(
+        uow_factory=TrackingUowFactory(app_config_repository=app_config_repository),
+        user_id="user-a",
+    )
+
+    updated = await service.update_notebook_embedding_config(
+        NotebookEmbeddingConfig(api_key="", model_name="new-embedding-a")
+    )
+
+    saved = await app_config_repository.get_by_user_id("user-a")
+    assert updated.api_key == "embedding-secret-a"
+    assert updated.model_name == "new-embedding-a"
+    assert saved.notebook_config.embedding_config.api_key == "embedding-secret-a"
 
 
 @pytest.mark.anyio
@@ -204,6 +239,7 @@ class InMemoryAppConfigRepository:
                 agent_config=AgentConfig(),
                 mcp_config=MCPConfig(),
                 a2a_config=A2AConfig(),
+                notebook_config=NotebookConfig(),
             )
             self.configs_by_user_id[user_id] = app_config
         return app_config
