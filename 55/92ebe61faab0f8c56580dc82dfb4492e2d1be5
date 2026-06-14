@@ -1,0 +1,139 @@
+tests/test_memory_graph_repository.py
+  s_b85c67e2355151::t_080c78fdfc6988 1-2,4-165
+  s_44b7f7a2f18bd5::t_ddfbf6e51b409e 3
+app/domain/services/memory/__init__.py
+  s_b85c67e2355151::t_f6f2f6c69e8d45 1-4
+app/domain/models/memory_graph.py
+  s_44b7f7a2f18bd5::t_aba7fe517b5525 115
+  s_44b7f7a2f18bd5::t_c774bb3a1b0307 1-83,85,103-114,116-125
+  s_44b7f7a2f18bd5::t_43a999c2fe1797 84,86-102
+  s_44b7f7a2f18bd5::t_c1965ad12a63dc 126-152
+app/domain/services/memory/graph_extractor.py
+  s_44b7f7a2f18bd5::t_cc2431a565af4f 15,74
+  s_44b7f7a2f18bd5::t_84b1ff8a5b869e 22-27,120,124,158,162-163
+  s_44b7f7a2f18bd5::t_3b4661f3257f44 1-14,16-21,28-73,75-119,121-123,125-157,159-161,164-284
+app/infrastructure/repositories/db_memory_repository.py
+  s_b85c67e2355151::t_79ead8158704aa 34-38
+app/interfaces/service_dependencies.py
+  s_44b7f7a2f18bd5::t_ddfbf6e51b409e 32,35,288
+  s_b85c67e2355151::t_7c836ddee34669 21,23-24
+  s_b85c67e2355151::t_db9fd191eff150 284-285,287,289,291-292
+  s_b85c67e2355151::t_16c09f76bdcdd7 41-43,63,133,140,145,229-232,235,277-279,282
+  s_44b7f7a2f18bd5::t_59edfceec597ad 22,228,233-234,265,280-281,286,290,293
+  s_b85c67e2355151::t_947713445382b9 224
+pyproject.toml
+  s_b85c67e2355151::t_24f279f3188889 26
+app/domain/services/prompts/memory.py
+  s_44b7f7a2f18bd5::t_8cc22eeeb41b98 1-19
+alembic/versions/2d6b7d9a0c11_add_memory_graph_fields.py
+  s_b85c67e2355151::t_c3bd85cfcb7608 1-41
+app/infrastructure/storage/neo4j.py
+  s_b85c67e2355151::t_d5feb28c82f68f 1-3,6-14,16-39,41-50
+  h_e1f1392360ad67 4-5,15,40
+tests/test_memory_service.py
+  s_44b7f7a2f18bd5::t_2b0f0f8ddaaa2f 94-96
+  s_b85c67e2355151::t_6acee541579044 5,7,9,16,18-20,28-29,31,58,60,62,64-85,88-93,98-111,114-132,135-141,145,147-149,161,254-264,266-269,275-277,283
+  s_b85c67e2355151::t_27c907e43c8717 226-231
+  s_44b7f7a2f18bd5::t_aba7fe517b5525 8,59,63
+  s_44b7f7a2f18bd5::t_ddfbf6e51b409e 6,61,86-87,97,112-113,133-134,265,270-274,278-282,284-295
+app/bootstrap/memory.py
+  s_b85c67e2355151::t_b85fafb25fa4a9 1-5,7-30,32-33,35-36,38-47
+  s_44b7f7a2f18bd5::t_61a80f502df700 6,31,34,37
+docker-compose.yml
+  s_b85c67e2355151::t_4f29649211ec83 41-55
+app/domain/services/memory/manager.py
+  s_44b7f7a2f18bd5::t_8f21fe1021160b 11-15,125,135,140,147-148,150,153-154
+  s_44b7f7a2f18bd5::t_1c2b63b0a4afd1 4,16,38-39,44-45,104,106-111,113-118
+  s_44b7f7a2f18bd5::t_aba7fe517b5525 124
+  s_b85c67e2355151::t_01a9f5e696cb83 1,5-10,19-20,33-37,40,43,63-65,69-70,86-88,102-103,105,112,119-123,126-134,136-139,141-146,149,151-152,155-160
+app/domain/services/tools/memory.py
+  s_44b7f7a2f18bd5::t_f04894c2dd1d68 44-48
+tests/test_memory_api.py
+  s_b85c67e2355151::t_c5b4c765f588a7 58
+core/config.py
+  s_b85c67e2355151::t_3be194d9ce01a5 45-50
+app/domain/models/long_term_memory.py
+  s_44b7f7a2f18bd5::t_594a69b941e17d 7,38,54
+  s_b85c67e2355151::t_cff59950350262 21,37,44-48,53,56,60-62
+  s_44b7f7a2f18bd5::t_9451c8b77b028f 39
+app/domain/external/task_dispatcher.py
+  s_b85c67e2355151::t_3e8dea52bd871d 10-13
+app/domain/repositories/memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_c774bb3a1b0307 1-2,4-18,20-21
+  s_44b7f7a2f18bd5::t_aba7fe517b5525 3,19
+app/tasks/memory/extract.py
+  s_44b7f7a2f18bd5::t_61a80f502df700 7,10,22,80,86
+  s_44b7f7a2f18bd5::t_695099eac0be1d 53
+  s_b85c67e2355151::t_443474ad5c88aa 1,3,5-6,8-9,11-20,24-38,41-52,54-72,74-79,87-105
+  s_b85c67e2355151::t_7c7658c0c27e84 2,4,21,23,39-40,73,81-85
+tests/test_memory_graph_extractor.py
+  s_44b7f7a2f18bd5::t_268ad442c4065d 1-3,8,19-171
+  s_44b7f7a2f18bd5::t_83b936ecfb3d8b 4-7,9-18
+tests/test_memory_extract_task.py
+  s_44b7f7a2f18bd5::t_3b5481ff21ad68 4,19-25,32-38
+  s_b85c67e2355151::t_1a3cda16340ebe 1-3,5-18,26-31,39-69
+app/application/services/memory_service.py
+  s_44b7f7a2f18bd5::t_61a80f502df700 4,7,20-21,27-28
+  s_b85c67e2355151::t_23d5431f33e239 5,15-19,22-26,29,32
+app/infrastructure/external/task_dispatcher/celery_task_dispatcher.py
+  s_b85c67e2355151::t_62ba487aee654f 12-17
+app/tasks/memory/__init__.py
+  s_b85c67e2355151::t_6e2134b8ee0cd9 1
+app/domain/repositories/memory_repository.py
+  s_b85c67e2355151::t_aa0e56ef46d019 20-23
+app/infrastructure/external/health_checker/neo4j_health_checker.py
+  s_b85c67e2355151::t_ca918758f7b4f3 1-23
+tests/test_memory_tool.py
+  s_b85c67e2355151::t_2527d698b919db 30,47,49-51,53-63
+  s_44b7f7a2f18bd5::t_8f5f4bc73bf324 4,17-23,29,31-32,48,52
+  s_44b7f7a2f18bd5::t_916361835a7dcc 24-28
+app/interfaces/schemas/memory.py
+  s_44b7f7a2f18bd5::t_f384e9ffd1bd95 25-34,46
+  s_b85c67e2355151::t_8f5de8335da6de 45
+tests/test_status_service.py
+  s_b85c67e2355151::t_518d1cf8873b3a 6-8,58,67,92-94
+app/main.py
+  s_b85c67e2355151::t_b6b05d16ca4e24 8,13,81,83,120
+app/infrastructure/repositories/neo4j_memory_graph_repository.py
+  s_b85c67e2355151::t_a10ced8d3e1a1c 87
+  h_e1f1392360ad67 127-128
+  s_b85c67e2355151::t_3cf8940dcc6a3e 1-2,4-5,7,9-10,12-64,86,110-112,131-158,174-180,182-214,217-228,230-235,237-245
+  s_b85c67e2355151::t_b4f5fdf81c10f7 181
+  s_44b7f7a2f18bd5::t_61a80f502df700 3,8,11
+  s_44b7f7a2f18bd5::t_aba7fe517b5525 6,70,162-163,229,236
+  s_b85c67e2355151::t_c00ece1c96f16e 215-216
+  s_b85c67e2355151::t_1a7b17554d7e00 65-69,71-85,88-109,113-126,129-130,159-161,164-173
+app/infrastructure/models/memory.py
+  s_b85c67e2355151::t_937e0c37db444b 31-32,47,55-57
+app/celery_app.py
+  s_b85c67e2355151::t_313c2f7ea7bcf5 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5592ebe61faab0f8c56580dc82dfb4492e2d1be5",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    },
+    "s_b85c67e2355151": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0c4-9dd1-7b42-b028-e30d00a7b87d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
