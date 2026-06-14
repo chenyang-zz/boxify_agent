@@ -1,0 +1,28 @@
+app/tasks/memory/extract.py
+  s_44b7f7a2f18bd5::t_775c86c2813517 6
+  h_e1f1392360ad67 71
+app/bootstrap/memory.py
+  s_44b7f7a2f18bd5::t_910ee41df9ba47 9,14,48-49,51-52
+  s_44b7f7a2f18bd5::t_1ff9ca0f282da1 6,50,53-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "327fad845779eec9ee9983bc2cfc9ba6cd52d962",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
