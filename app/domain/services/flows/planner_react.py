@@ -19,12 +19,14 @@ from app.domain.models.message import Message
 from app.domain.models.plan import ExecutionStatus, Plan, Step
 from app.domain.models.session import SessionStatus
 from app.domain.repositories.vow import IUnitOfWork
+from app.domain.services.memory import MemorySearch
 from app.domain.services.agents.planner import PlannerAgent
 from app.domain.services.agents.react import ReActAgent
 from app.domain.services.flows.base import BaseFlow, FlowStatus
 from app.domain.services.tools.a2a import A2ATool
 from app.domain.services.tools.browser import BrowserTool
 from app.domain.services.tools.file import FileTool
+from app.domain.services.tools.memory import MemoryTool
 from app.domain.services.tools.mcp import MCPTool
 from app.domain.services.tools.message import MessageTool
 from app.domain.services.tools.search import SearchTool
@@ -48,6 +50,7 @@ class PlannerReActFlow(BaseFlow):
         search_engine: SearchEngine,  # 搜索引擎
         mcp_tool: MCPTool,  # mcp工具
         a2a_tool: A2ATool,  # a2a远程agent
+        memory: MemorySearch | None = None,
     ) -> None:
         """构造函数，完成规划与执行流的初始化"""
         # 流初始化数据配置
@@ -66,6 +69,8 @@ class PlannerReActFlow(BaseFlow):
             mcp_tool,
             a2a_tool,
         ]
+        if memory:
+            tools.append(MemoryTool(memory))
 
         # 创建规划agent
         self.planner = PlannerAgent(

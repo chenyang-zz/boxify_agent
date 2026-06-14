@@ -14,6 +14,7 @@ from app.application.services.app_config_service import AppConfigService
 from app.application.services.auth_service import AuthService
 from app.application.services.document_service import DocumentService
 from app.application.services.file_service import FileService
+from app.application.services.memory_service import MemoryService
 from app.application.services.session_service import SessionService
 from app.application.services.status_service import StatusService
 from app.application.services.tag_service import TagService
@@ -26,6 +27,7 @@ from app.bootstrap.notebook import (
 )
 from app.domain.external.knowledge_search import KnowledgeSearch
 from app.domain.models.user import User
+from app.domain.services.memory import LongTermMemoryManager
 from app.infrastructure.external.file_storage.cos_file_storage import CosFileStorage
 from app.infrastructure.external.health_checker.elasticsearch_health_checker import (
     ElasticsearchHealthChecker,
@@ -207,6 +209,13 @@ def get_document_service(
     )
 
 
+def get_memory_service(
+    current_user: User = Depends(require_active_user),
+) -> MemoryService:
+    """获取长期记忆服务"""
+    return MemoryService(uow_factory=get_uow, user_id=current_user.id)
+
+
 def get_session_service() -> SessionService:
     return SessionService(uow_factory=get_uow, sandbox_cls=DockerSandbox)
 
@@ -245,4 +254,5 @@ async def get_agent_service(
         json_parser=RepairJSONParser(),
         search_engine=BingSearchEngine,
         file_storage=file_storage,
+        memory=LongTermMemoryManager(uow_factory=get_uow, user_id=current_user.id),
     )

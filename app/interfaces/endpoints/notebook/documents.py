@@ -3,11 +3,10 @@ from typing import Dict
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 
 from app.application.services.document_service import DocumentService
-from app.interfaces.schemas.base import Response
+from app.interfaces.schemas.base import PageData, Response
 from app.interfaces.schemas.notebook import (
     KnowledgeSearchHitResponse,
     KnowledgeSearchRequest,
-    NotebookDocumentListResponse,
     NotebookDocumentResponse,
     NotebookUrlImportRequest,
 )
@@ -57,7 +56,7 @@ async def import_from_url(
 
 @router.get(
     "",
-    response_model=Response[NotebookDocumentListResponse],
+    response_model=Response[PageData[NotebookDocumentResponse]],
     summary="分页查询Notebook文档",
     description="分页查询当前用户的Notebook文档列表，可按标签名称过滤。",
 )
@@ -71,12 +70,12 @@ async def list_documents(
     documents, total = await document_service.list_documents(page, page_size, tag)
     items = [await document_service.to_response(document) for document in documents]
     return Response.success(
-        data={
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": items,
-        }
+        data=PageData[NotebookDocumentResponse].create(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
     )
 
 

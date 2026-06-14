@@ -12,6 +12,7 @@ from typing import Self
 from app.domain.repositories.app_config_repository import AppConfigRepository
 from app.domain.repositories.document_repository import DocumentRepository
 from app.domain.repositories.file_repository import FileRepository
+from app.domain.repositories.memory_repository import MemoryRepository
 from app.domain.repositories.session_repository import SessionRepository
 from app.domain.repositories.tag_repository import TagRepository
 from app.domain.repositories.user_repository import UserRepository
@@ -26,6 +27,7 @@ class IUnitOfWork(ABC):
     tag: TagRepository
     session: SessionRepository
     user: UserRepository
+    memory: MemoryRepository
 
     @abstractmethod
     async def commit(self):

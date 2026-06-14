@@ -6,6 +6,7 @@ from . import (
     app_config_routes,
     auth_routes,
     file_route,
+    memory_routes,
     notebook,
     session_routes,
     status_routes,
@@ -25,6 +26,7 @@ def create_api_routes() -> APIRouter:
         app_config_routes.router, dependencies=protected_dependencies
     )
     api_router.include_router(file_route.router, dependencies=protected_dependencies)
+    api_router.include_router(memory_routes.router, dependencies=protected_dependencies)
     api_router.include_router(notebook.router, dependencies=protected_dependencies)
     api_router.include_router(
         session_routes.router, dependencies=protected_dependencies

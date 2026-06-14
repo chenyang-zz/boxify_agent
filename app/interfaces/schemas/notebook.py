@@ -20,15 +20,6 @@ class NotebookDocumentResponse(BaseModel):
     created_at: datetime | None = None
 
 
-class NotebookDocumentListResponse(BaseModel):
-    """知识库文档分页响应模型。"""
-
-    total: int
-    page: int
-    page_size: int
-    items: list[NotebookDocumentResponse]
-
-
 class NotebookUrlImportRequest(BaseModel):
     """网页导入请求。"""
 

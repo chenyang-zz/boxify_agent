@@ -29,8 +29,10 @@ from app.domain.models.event import (
     WaitEvent,
 )
 from app.domain.models.file import File
+from app.domain.models.long_term_memory import MemorySource
 from app.domain.models.session import Session, SessionStatus
 from app.domain.repositories.vow import IUnitOfWork
+from app.domain.services.memory import LongTermMemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ class AgentService:
         json_parser: JSONParser,
         search_engine: SearchEngine,
         file_storage: FileStorage,
+        memory: LongTermMemoryManager | None = None,
     ) -> None:
         """构造函数，完成Agent服务的初始化"""
         self._uow_factory = uow_factory
@@ -62,6 +65,7 @@ class AgentService:
         self._json_parser = json_parser
         self._search_engine = search_engine
         self._file_storage = file_storage
+        self._memory = memory
         logger.info("AgentService初始化成功")
 
     async def _get_task(self, session: Session) -> Optional[Task]:
@@ -109,6 +113,7 @@ class AgentService:
             browser=browser,
             search_engine=self._search_engine,
             sandbox=sandbox,
+            memory=self._memory,
         )
 
         # 创建任务Task并更新会话中的信息
@@ -132,6 +137,19 @@ class AgentService:
                 await uow.session.update_unread_message_count(session_id, 0)
         except Exception as e:
             logger.warning(f"会话[{session_id}]后台更新未读消息计数失败: {e}")
+
+    async def _safe_remember_session_text(self, session_id: str, message: str) -> None:
+        """把用户会话消息沉淀为长期记忆，失败不影响主聊天。"""
+        if not self._memory:
+            return
+        try:
+            await self._memory.remember_text(
+                message,
+                source=MemorySource.SESSION,
+                source_session_id=session_id,
+            )
+        except Exception as e:
+            logger.warning(f"会话[{session_id}]沉淀长期记忆失败: {e}")
 
     async def chat(
         self,
@@ -183,6 +201,8 @@ class AgentService:
                         timestamp=timestamp or datetime.now(),
                     )
                     await uow.session.add_event(session_id, message_event)
+
+                await self._safe_remember_session_text(session_id, message)
 
                 # 执行任务
                 await task.invoke()
