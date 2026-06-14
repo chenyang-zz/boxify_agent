@@ -16,6 +16,7 @@ from app.domain.repositories.vow import IUnitOfWork
 from app.infrastructure.repositories.db_app_config_repository import DBAppConfigRepository
 from app.infrastructure.repositories.db_document_repository import DBDocumentRepository
 from app.infrastructure.repositories.db_file_repository import DBFileRepository
+from app.infrastructure.repositories.db_memory_repository import DBMemoryRepository
 from app.infrastructure.repositories.db_session_repository import DBSessionRepository
 from app.infrastructure.repositories.db_tag_repository import DBTagRepository
 from app.infrastructure.repositories.db_user_repository import DBUserRepository
@@ -65,6 +66,7 @@ class DBUnitOfWork(IUnitOfWork):
         self.file = DBFileRepository(db_session=db_session)
         self.session = DBSessionRepository(db_session=db_session)
         self.user = DBUserRepository(db_session=db_session)
+        self.memory = DBMemoryRepository(db_session=db_session)
 
         return self
 

@@ -3,6 +3,7 @@ import pytest
 from app.application.services.agent_service import AgentService
 from app.application.services.auth_service import AuthService
 from app.domain.models.app_config import A2AConfig, AgentConfig, MCPConfig
+from app.domain.models.long_term_memory import MemorySource
 from app.domain.models.session import Session, SessionStatus
 from app.domain.models.user import User
 from app.infrastructure.repositories.db_uow import DBUnitOfWork
@@ -98,6 +99,35 @@ async def test_agent_service_persists_user_message_in_single_transaction():
     ]
     assert len(write_uows) == 1
     assert write_uows[0].session.added_events
+
+
+@pytest.mark.anyio
+async def test_agent_service_remembers_user_message_when_memory_is_configured():
+    session_repository = InMemorySessionRepository()
+    session = Session(id="session-1", title="对话", status=SessionStatus.PENDING)
+    session_repository.sessions[session.id] = session
+    uow_factory = TrackingUowFactory(session_repository=session_repository)
+    memory = FakeLongTermMemoryManager()
+    task_cls = RecordingTask
+    task_cls.created_tasks = []
+    service = AgentService(
+        uow_factory=uow_factory,
+        llm=object(),
+        agent_config=AgentConfig(),
+        mcp_config=MCPConfig(),
+        a2a_config=A2AConfig(),
+        sandbox_cls=FakeSandbox,
+        task_cls=task_cls,
+        json_parser=object(),
+        search_engine=object(),
+        file_storage=object(),
+        memory=memory,
+    )
+
+    async for _ in service.chat(session_id=session.id, message="hello memory"):
+        pass
+
+    assert memory.remembered == [("hello memory", MemorySource.SESSION, "session-1")]
 
 
 class FakeDBSession:
@@ -258,3 +288,11 @@ class RecordingInputStream:
     async def put(self, message):
         self.messages.append(message)
         return f"event-{len(self.messages)}"
+
+
+class FakeLongTermMemoryManager:
+    def __init__(self):
+        self.remembered = []
+
+    async def remember_text(self, content: str, source, source_session_id=None):
+        self.remembered.append((content, source, source_session_id))

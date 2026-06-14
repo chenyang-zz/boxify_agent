@@ -1,4 +1,5 @@
-from typing import TypeVar, Generic, Optional
+from typing import Generic, Optional, TypeVar
+
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
@@ -20,3 +21,23 @@ class Response(BaseModel, Generic[T]):
     def fail(code: int, msg: str, data: Optional[T] = None) -> "Response[T]":
         """失败消息，传递code+msg+data"""
         return Response(code=code, msg=msg, data=data if data is not None else {})
+
+
+class PageData(BaseModel, Generic[T]):
+    """统一分页响应数据。"""
+
+    total: int
+    page: int
+    page_size: int
+    items: list[T]
+
+    @classmethod
+    def create(
+        cls,
+        items: list[T],
+        total: int,
+        page: int,
+        page_size: int,
+    ) -> "PageData[T]":
+        """构造统一分页数据。"""
+        return cls(total=total, page=page, page_size=page_size, items=items)
