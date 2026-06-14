@@ -108,6 +108,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
     async def _search_fulltext(
         self, user_id: str, query: str, top_k: int
     ) -> list[dict[str, Any]]:
+        """通过 Neo4j 全文索引召回候选实体及其一跳上下文。"""
         cypher = """
         CALL db.index.fulltext.queryNodes('memory_entity_fulltext', $search_text)
         YIELD node, score
@@ -126,6 +127,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
     async def _search_vector(
         self, user_id: str, query_embedding: list[float], top_k: int
     ) -> list[dict[str, Any]]:
+        """通过 Neo4j 向量索引召回候选实体及其一跳上下文。"""
         cypher = """
         CALL db.index.vector.queryNodes(
             'memory_entity_embedding',
@@ -148,6 +150,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     @staticmethod
     def _entity_context_return_clause() -> str:
+        """返回实体召回后补齐来源记忆和一跳关系的 Cypher 片段。"""
         return """
         ORDER BY score DESC LIMIT $top_k
         OPTIONAL MATCH (source:Entity {user_id: $user_id})-[incoming:RELATION]->(node)
@@ -187,6 +190,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         vector_rows: list[dict[str, Any]],
         top_k: int,
     ) -> list[MemoryGraphResult]:
+        """融合全文和向量召回结果，按归一化加权分数排序。"""
         fulltext_results = [self._row_to_search_result(row) for row in fulltext_rows]
         vector_results = [self._row_to_search_result(row) for row in vector_rows]
         fulltext_scores = {
@@ -213,6 +217,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     @staticmethod
     def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
+        """把一组原始召回分数归一化到 0 到 1 区间。"""
         if not scores:
             return {}
         values = list(scores.values())
@@ -224,6 +229,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     @staticmethod
     async def _merge_graph(tx, params: dict[str, Any]) -> None:
+        """将完整记忆图谱以 MERGE 方式幂等写入 Neo4j。"""
         await tx.run(
             """
             MERGE (d:Dialogue {id: $dialogue_id, user_id: $user_id})
@@ -277,6 +283,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     @staticmethod
     def _row_to_search_result(row: dict[str, Any]) -> MemoryGraphResult:
+        """把 Neo4j 原始查询行转换为领域检索结果模型。"""
         entity = row.get("entity") or {}
         relations = [
             GraphRelationFact.model_validate(relation)
@@ -296,6 +303,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     @staticmethod
     def _row_to_entity_node(row: dict[str, Any], user_id: str) -> EntityNode:
+        """把 Neo4j 实体行转换为领域实体节点模型。"""
         return EntityNode(
             id=str(row.get("id") or ""),
             user_id=user_id,

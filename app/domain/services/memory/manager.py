@@ -101,6 +101,7 @@ class LongTermMemoryManager:
         return [word for word in normalized.split() if word][:8]
 
     async def _search_graph(self, query: str, top_k: int) -> list[LongTermMemory]:
+        """优先从 Neo4j 图谱检索长期记忆，失败时交由 PG 检索兜底。"""
         if not self._graph_repository:
             return []
         query_embedding = None
@@ -122,6 +123,7 @@ class LongTermMemoryManager:
         return [self._graph_result_to_memory(result) for result in results]
 
     def _graph_result_to_memory(self, result: MemoryGraphResult) -> LongTermMemory:
+        """将图谱检索命中投影成长期记忆领域模型。"""
         relation_facts = result.relations
         summary = result.source_memory_summary or result.description or result.entity_name
         content = self._format_graph_content(result, relation_facts)
@@ -139,6 +141,7 @@ class LongTermMemoryManager:
     def _format_graph_content(
         result: MemoryGraphResult, relation_facts: list[GraphRelationFact]
     ) -> str:
+        """将一跳关系事实格式化为可给 Agent 阅读的记忆内容。"""
         if result.source_memory_summary:
             return result.source_memory_summary
         if relation_facts:

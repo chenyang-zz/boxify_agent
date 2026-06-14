@@ -62,6 +62,7 @@ async def run_extract_memory(
 
 
 async def _run(memory_id: str) -> None:
+    """初始化 worker 外部资源并执行单条记忆萃取任务。"""
     await get_postgres().init()
     await get_neo4j().init()
     try:

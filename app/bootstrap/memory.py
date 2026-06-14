@@ -4,6 +4,7 @@ from app.bootstrap.notebook import build_embedding_model, build_task_dispatcher
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.app_config import AppConfig
+from app.domain.services.memory.fact_extractor import MemoryFactExtractor
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
 from app.infrastructure.external.json_parser.repair_json_parser import RepairJSONParser
 from app.infrastructure.external.llm.openai_llm import OpenAILLM
@@ -37,10 +38,10 @@ async def build_memory_graph_extractor(
 ) -> MemoryGraphExtractor:
     """按用户组装记忆图谱萃取流水线。"""
     embedding = await build_embedding_model(user_id)
+    fact_extractor = MemoryFactExtractor(llm=llm, json_parser=RepairJSONParser())
     return MemoryGraphExtractor(
-        llm=llm,
+        fact_extractor=fact_extractor,
         embedding=embedding,
-        json_parser=RepairJSONParser(),
         graph_repository=build_memory_graph_repository(),
     )
 

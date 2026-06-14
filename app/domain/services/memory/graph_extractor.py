@@ -1,11 +1,4 @@
-import json
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field
-
 from app.domain.external.embedding import EmbeddingModel
-from app.domain.external.json_parser import JSONParser
-from app.domain.external.llm import LLM
 from app.domain.models.memory_graph import (
     ChunkNode,
     DialogueNode,
@@ -18,61 +11,12 @@ from app.domain.models.memory_graph import (
     stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
-from app.domain.services.memory.ontology import normalize_entity_type, normalize_predicate
-from app.domain.services.prompts.memory import (
-    EXTRACT_STATEMENTS_PROMPT,
-    EXTRACT_STATEMENTS_SYSTEM_PROMPT,
-    EXTRACT_TRIPLETS_PROMPT,
-    EXTRACT_TRIPLETS_SYSTEM_PROMPT,
+from app.domain.services.memory.fact_extractor import (
+    ExtractedEntity,
+    ExtractedTriplets,
+    MemoryFactExtractor,
 )
-
-
-class ExtractedEntity(BaseModel):
-    """LLM 萃取出的实体。"""
-
-    model_config = ConfigDict(extra="ignore")
-
-    entity_idx: int = 0
-    name: str
-    type: str = "Thing"
-    description: str = ""
-    importance: float = 0.5
-    confidence: float = 0.8
-
-
-class ExtractedTriplet(BaseModel):
-    """LLM 萃取出的实体三元组。"""
-
-    model_config = ConfigDict(extra="ignore")
-
-    subject_id: int = 0
-    predicate: str = ""
-    object_id: int = 0
-    evidence: str
-    importance: float = 0.5
-    confidence: float = 0.8
-
-
-class ExtractedStatement(BaseModel):
-    """LLM 萃取出的结构化原子陈述。"""
-
-    model_config = ConfigDict(extra="ignore")
-
-    statement: str = ""
-    statement_type: str = "FACT"
-    temporal_type: str = "STATIC"
-    has_unsolved_reference: bool = False
-    importance: float = 0.5
-    confidence: float = 0.8
-
-
-class _ExtractedStatements(BaseModel):
-    statements: list[ExtractedStatement] = Field(default_factory=list)
-
-
-class _ExtractedTriplets(BaseModel):
-    entities: list[ExtractedEntity] = Field(default_factory=list)
-    triplets: list[ExtractedTriplet] = Field(default_factory=list)
+from app.domain.services.memory.ontology import normalize_entity_type, normalize_predicate
 
 
 class MemoryGraphExtractor:
@@ -80,15 +24,13 @@ class MemoryGraphExtractor:
 
     def __init__(
         self,
-        llm: LLM,
+        fact_extractor: MemoryFactExtractor,
         embedding: EmbeddingModel,
-        json_parser: JSONParser,
         graph_repository: MemoryGraphRepository,
         chunk_size: int = 1200,
     ) -> None:
-        self._llm = llm
+        self._fact_extractor = fact_extractor
         self._embedding = embedding
-        self._json_parser = json_parser
         self._graph_repository = graph_repository
         self._chunk_size = chunk_size
 
@@ -103,8 +45,8 @@ class MemoryGraphExtractor:
             summary=content.strip(),
         )
         chunks = self._chunk_text(user_id, dialogue.id, content)
-        statements = await self._extract_statements(user_id, chunks)
-        triplets = await self._extract_triplets(statements)
+        statements = await self._fact_extractor.extract_statements(chunks)
+        triplets = await self._fact_extractor.extract_triplets(statements)
         graph = await self._build_graph(dialogue, chunks, statements, triplets)
         await self._graph_repository.save_graph(graph)
         return graph.stats()
@@ -112,6 +54,7 @@ class MemoryGraphExtractor:
     def _chunk_text(
         self, user_id: str, dialogue_id: str, content: str
     ) -> list[ChunkNode]:
+        """将记忆正文按固定窗口切成 chunk，保留用户和对话归属。"""
         normalized = content.strip()
         if not normalized:
             return []
@@ -131,82 +74,14 @@ class MemoryGraphExtractor:
             for index, chunk in enumerate(chunks)
         ]
 
-    async def _extract_statements(
-        self, user_id: str, chunks: list[ChunkNode]
-    ) -> list[StatementNode]:
-        statements: list[StatementNode] = []
-        for chunk in chunks:
-            response = await self._llm.invoke(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": EXTRACT_STATEMENTS_SYSTEM_PROMPT,
-                    },
-                    {
-                        "role": "user",
-                        "content": EXTRACT_STATEMENTS_PROMPT.format(text=chunk.text),
-                    },
-                ],
-                response_format={"type": "json_object"},
-            )
-            parsed = await self._parse_json(response.get("content"), {"statements": []})
-            extracted = _ExtractedStatements.model_validate(parsed)
-            for statement in extracted.statements:
-                text = statement.statement.strip()
-                if statement.has_unsolved_reference:
-                    continue
-                if not text:
-                    continue
-                index = len(statements)
-                statements.append(
-                    StatementNode(
-                        id=stable_memory_graph_id(
-                            user_id, chunk.id, "statement", str(index), text
-                        ),
-                        user_id=user_id,
-                        chunk_id=chunk.id,
-                        index=index,
-                        text=text,
-                        statement_type=statement.statement_type,
-                        temporal_type=statement.temporal_type,
-                        importance=statement.importance,
-                        confidence=statement.confidence,
-                    )
-                )
-        return statements
-
-    async def _extract_triplets(
-        self, statements: list[StatementNode]
-    ) -> _ExtractedTriplets:
-        if not statements:
-            return _ExtractedTriplets()
-        response = await self._llm.invoke(
-            messages=[
-                {
-                    "role": "system",
-                    "content": EXTRACT_TRIPLETS_SYSTEM_PROMPT,
-                },
-                {
-                    "role": "user",
-                    "content": EXTRACT_TRIPLETS_PROMPT.format(
-                        statements=[statement.text for statement in statements]
-                    ),
-                },
-            ],
-            response_format={"type": "json_object"},
-        )
-        parsed = await self._parse_json(
-            response.get("content"), {"entities": [], "triplets": []}
-        )
-        return _ExtractedTriplets.model_validate(parsed)
-
     async def _build_graph(
         self,
         dialogue: DialogueNode,
         chunks: list[ChunkNode],
         statements: list[StatementNode],
-        triplet_result: _ExtractedTriplets,
+        triplet_result: ExtractedTriplets,
     ) -> MemoryGraph:
+        """根据陈述和三元组组装四层溯源图谱。"""
         entity_by_idx = await self._build_entities(dialogue.user_id, triplet_result.entities)
         relations: list[RelationEdge] = []
         mentions_by_key: dict[tuple[str, str], MentionEdge] = {}
@@ -277,6 +152,7 @@ class MemoryGraphExtractor:
     async def _build_entities(
         self, user_id: str, extracted_entities: list[ExtractedEntity]
     ) -> dict[int, EntityNode]:
+        """归一化并去重本次抽取实体，再与图数据库已有实体融合。"""
         entity_by_key: dict[tuple[str, str], EntityNode] = {}
         entity_by_idx: dict[int, EntityNode] = {}
         for extracted in extracted_entities:
@@ -308,6 +184,7 @@ class MemoryGraphExtractor:
     async def _merge_entities_with_graph(
         self, user_id: str, entities: list[EntityNode]
     ) -> None:
+        """按实体类型查询已有节点，复用同名实体 ID 和更完整描述。"""
         cache: dict[str, list[EntityNode]] = {}
         for entity in entities:
             if entity.type not in cache:
@@ -329,16 +206,3 @@ class MemoryGraphExtractor:
             old_description = existing.description
             if len(old_description) > len(entity.description):
                 entity.description = old_description
-
-    async def _parse_json(self, content: Any, default_value: dict[str, Any]) -> Any:
-        if not isinstance(content, str):
-            content = json.dumps(content, ensure_ascii=False)
-        try:
-            parsed = await self._json_parser.invoke(
-                content, default_value=default_value
-            )
-        except Exception:
-            return default_value
-        if not isinstance(parsed, dict):
-            return default_value
-        return parsed
