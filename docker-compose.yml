@@ -38,3 +38,18 @@ services:
     volumes:
       - ./elasticsearch-data:/usr/share/elasticsearch/data
     restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: neo4j-server
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-neo4j-password}
+      NEO4J_PLUGINS: '["apoc"]'
+      TZ: Asia/Shanghai
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - ./neo4j-data:/data
+      - ./neo4j-logs:/logs
+    restart: unless-stopped

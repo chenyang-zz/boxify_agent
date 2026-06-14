@@ -41,6 +41,11 @@ class MemoryTool(BaseTool):
                     "content": memory.content,
                     "summary": memory.summary,
                     "keywords": memory.keywords,
+                    "graph": (
+                        memory.graph_data.model_dump(mode="python", exclude_none=True)
+                        if memory.graph_data
+                        else {}
+                    ),
                 }
                 for memory in memories
             ],

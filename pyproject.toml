@@ -23,6 +23,7 @@ dependencies = [
     "logging>=0.4.9.6",
     "markdownify>=1.2.2",
     "mcp>=1.27.2",
+    "neo4j>=5.27.0",
     "openai>=2.37.0",
     "playwright>=1.60.0",
     "pymupdf>=1.27.2",

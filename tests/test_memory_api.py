@@ -55,7 +55,7 @@ def test_create_and_search_memory_for_current_user(monkeypatch):
 
     assert create_response.status_code == 200
     assert create_response.json()["data"]["content"] == "我喜欢周杰伦的歌"
-    assert create_response.json()["data"]["status"] == "completed"
+    assert create_response.json()["data"]["status"] == "pending"
     assert search_response.status_code == 200
     assert [item["content"] for item in search_response.json()["data"]] == [
         "我喜欢周杰伦的歌"

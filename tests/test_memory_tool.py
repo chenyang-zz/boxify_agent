@@ -1,6 +1,7 @@
 import pytest
 
 from app.domain.models.long_term_memory import LongTermMemory
+from app.domain.models.memory_graph import GraphRelationFact, LongTermMemoryGraphData
 from app.domain.services.tools.memory import MemoryTool
 
 
@@ -13,6 +14,22 @@ async def test_memory_tool_searches_user_long_term_memories():
                 content="我喜欢周杰伦的歌",
                 summary="用户喜欢周杰伦",
                 keywords=["周杰伦"],
+                graph_data=LongTermMemoryGraphData(
+                    entity_id="entity-1",
+                    entity_name="周杰伦",
+                    entity_type="Person",
+                    description="歌手",
+                    relations=[
+                        GraphRelationFact(
+                            name="LIKES",
+                            direction="incoming",
+                            neighbor_name="用户",
+                            neighbor_type="Person",
+                            evidence="用户喜欢周杰伦的歌",
+                        )
+                    ],
+                    source_memory_summary="用户喜欢周杰伦",
+                ),
             )
         ]
     )
@@ -27,6 +44,23 @@ async def test_memory_tool_searches_user_long_term_memories():
             "content": "我喜欢周杰伦的歌",
             "summary": "用户喜欢周杰伦",
             "keywords": ["周杰伦"],
+            "graph": {
+                "entity_id": "entity-1",
+                "entity_name": "周杰伦",
+                "entity_type": "Person",
+                "description": "歌手",
+                "score": 0,
+                "relations": [
+                    {
+                        "name": "LIKES",
+                        "direction": "incoming",
+                        "neighbor_name": "用户",
+                        "neighbor_type": "Person",
+                        "evidence": "用户喜欢周杰伦的歌",
+                    }
+                ],
+                "source_memory_summary": "用户喜欢周杰伦",
+            },
         }
     ]
     assert memory.search_calls == [("喜欢的歌手", 3)]

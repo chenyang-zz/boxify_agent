@@ -5,10 +5,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.bootstrap.memory import ensure_memory_graph_schema
 from app.bootstrap.notebook import ensure_knowledge_index
 from app.infrastructure.logging import setup_logging
 from app.infrastructure.storage.cos import get_cos
 from app.infrastructure.storage.elasticsearch import get_elasticsearch
+from app.infrastructure.storage.neo4j import get_neo4j
 from app.infrastructure.storage.postgres import get_postgres
 from app.infrastructure.storage.redis import get_redis
 from app.interfaces.endpoints.routes import router
@@ -76,7 +78,9 @@ async def lifespan(app: FastAPI):
     await get_postgres().init()
     await get_cos().init()
     await get_elasticsearch().init()
+    await get_neo4j().init()
     await ensure_knowledge_index()
+    await ensure_memory_graph_schema()
 
     auth_service = get_auth_service()
     created_admin = await auth_service.bootstrap_admin(
@@ -113,6 +117,7 @@ async def lifespan(app: FastAPI):
         await get_postgres().shutdown()
         await get_cos().shutdown()
         await get_elasticsearch().shutdown()
+        await get_neo4j().shutdown()
 
 
 # 4.创建应用实例

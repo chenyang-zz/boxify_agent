@@ -329,6 +329,7 @@ dependencies = [
     { name = "logging" },
     { name = "markdownify" },
     { name = "mcp" },
+    { name = "neo4j" },
     { name = "openai" },
     { name = "playwright" },
     { name = "psycopg2-binary" },
@@ -373,6 +374,7 @@ requires-dist = [
     { name = "logging", specifier = ">=0.4.9.6" },
     { name = "markdownify", specifier = ">=1.2.2" },
     { name = "mcp", specifier = ">=1.27.2" },
+    { name = "neo4j", specifier = ">=5.27.0" },
     { name = "openai", specifier = ">=2.37.0" },
     { name = "playwright", specifier = ">=1.60.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
@@ -1536,6 +1538,18 @@ wheels = [
 ]
 
 [[package]]
+name = "neo4j"
+version = "6.2.0"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+dependencies = [
+    { name = "pytz" },
+]
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ce/f4/aaa4ac19adae4b01bc742b63afd2672a77e7351566f02721e713e4b863ee/neo4j-6.2.0.tar.gz", hash = "sha256:e1e246b65b572bd8ea97f9e0e721b7d40a5ce53e53d0007c29aef63e4f9124d9", size = 241459, upload-time = "2026-05-04T07:35:41.428Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e6/cf/1c3795866cefaac6e648d4e98c373cafd97810f6e317c307371007ab4abb/neo4j-6.2.0-py3-none-any.whl", hash = "sha256:b87abdd13a5cc2e3bd51026926c2f20ac38fa3febe98c340520dce19e97388d0", size = 327824, upload-time = "2026-05-04T07:35:39.604Z" },
+]
+
+[[package]]
 name = "networkx"
 version = "3.6.1"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -2232,6 +2246,15 @@ source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/36/0b/cd77011c1bc01b76404f7aba07fca18aca02a19c7626e329b40201217624/python_socks-2.8.1.tar.gz", hash = "sha256:698daa9616d46dddaffe65b87db222f2902177a2d2b2c0b9a9361df607ab3687", size = 38909, upload-time = "2026-02-16T05:24:00.745Z" }
 wheels = [
     { url = "https://pypi.tuna.tsinghua.edu.cn/packages/15/fe/9a58cb6eec633ff6afae150ca53c16f8cc8b65862ccb3d088051efdfceb7/python_socks-2.8.1-py3-none-any.whl", hash = "sha256:28232739c4988064e725cdbcd15be194743dd23f1c910f784163365b9d7be035", size = 55087, upload-time = "2026-02-16T05:23:59.147Z" },
+]
+
+[[package]]
+name = "pytz"
+version = "2026.2"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ff/46/dd499ec9038423421951e4fad73051febaa13d2df82b4064f87af8b8c0c3/pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a", size = 320861, upload-time = "2026-05-04T01:35:29.667Z" }
+wheels = [
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ec/dd/96da98f892250475bdf2328112d7468abdd4acc7b902b6af23f4ed958ea0/pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126", size = 510141, upload-time = "2026-05-04T01:35:27.408Z" },
 ]
 
 [[package]]

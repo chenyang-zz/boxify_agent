@@ -28,6 +28,8 @@ class MemoryModel(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     keywords: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    graph_dialogue_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    graph_stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -42,7 +44,7 @@ class MemoryModel(Base):
     @classmethod
     def from_domain(cls, memory: LongTermMemory) -> Self:
         """从领域模型创建 ORM 记录。"""
-        return cls(**memory.model_dump(mode="python"))
+        return cls(**memory.model_dump(mode="python", exclude={"graph_data"}))
 
     def to_domain(self) -> LongTermMemory:
         """转换为领域模型。"""
@@ -50,5 +52,7 @@ class MemoryModel(Base):
 
     def update_from_domain(self, memory: LongTermMemory) -> None:
         """用领域模型覆盖 ORM 字段。"""
-        for field, value in memory.model_dump(mode="python").items():
+        for field, value in memory.model_dump(
+            mode="python", exclude={"graph_data"}
+        ).items():
             setattr(self, field, value)

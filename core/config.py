@@ -42,6 +42,12 @@ class Settings(BaseSettings):
 
     notebook_embedding_dims: int = 1024
 
+    # Neo4j 记忆图谱配置
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_username: str = "neo4j"
+    neo4j_password: str = Field(default="neo4j-password", repr=False)
+    neo4j_database: str = "neo4j"
+
     # Elasticsearch配置
     elasticsearch_url: str = "http://localhost:9200"
     elasticsearch_username: str = ""

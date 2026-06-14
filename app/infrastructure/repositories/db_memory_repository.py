@@ -31,6 +31,11 @@ class DBMemoryRepository(MemoryRepository):
         record = (await self.db_session.execute(stmt)).scalar_one_or_none()
         return record.to_domain() if record else None
 
+    async def get_user_id_by_memory_id(self, memory_id: str) -> str | None:
+        """按记忆 ID 读取所属用户 ID。"""
+        stmt = select(MemoryModel.user_id).where(MemoryModel.id == memory_id)
+        return (await self.db_session.execute(stmt)).scalar_one_or_none()
+
     async def list_by_user(
         self, user_id: str, page: int, page_size: int
     ) -> tuple[list[LongTermMemory], int]:

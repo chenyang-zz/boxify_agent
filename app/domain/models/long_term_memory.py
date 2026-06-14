@@ -4,6 +4,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from app.domain.models.memory_graph import LongTermMemoryGraphData, MemoryGraphStats
+
 
 class MemorySource(str, Enum):
     """记忆来源。"""
@@ -16,6 +18,7 @@ class MemoryStatus(str, Enum):
     """记忆处理状态。"""
 
     PENDING = "pending"
+    EXTRACTING = "extracting"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -31,19 +34,32 @@ class LongTermMemory(BaseModel):
     status: MemoryStatus = MemoryStatus.PENDING
     summary: str | None = None
     keywords: list[str] = Field(default_factory=list)
+    graph_dialogue_id: str | None = None
+    graph_stats: MemoryGraphStats = Field(default_factory=MemoryGraphStats)
+    graph_data: LongTermMemoryGraphData | None = None
     error_msg: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+    def mark_extracting(self) -> None:
+        """标记记忆正在异步萃取图谱。"""
+        self.status = MemoryStatus.EXTRACTING
+        self.error_msg = None
 
     def mark_completed(
         self,
         summary: str | None = None,
         keywords: list[str] | None = None,
+        graph_dialogue_id: str | None = None,
+        graph_stats: MemoryGraphStats | None = None,
     ) -> None:
-        """标记记忆可用，V1 的主动记住同步完成。"""
+        """标记记忆图谱萃取完成。"""
         self.status = MemoryStatus.COMPLETED
         self.summary = summary or self.content
         self.keywords = keywords or []
+        self.graph_dialogue_id = graph_dialogue_id or self.graph_dialogue_id
+        if graph_stats is not None:
+            self.graph_stats = graph_stats
         self.error_msg = None
 
     def mark_failed(self, error_msg: str) -> None:

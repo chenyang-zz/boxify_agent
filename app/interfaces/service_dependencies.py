@@ -18,6 +18,10 @@ from app.application.services.memory_service import MemoryService
 from app.application.services.session_service import SessionService
 from app.application.services.status_service import StatusService
 from app.application.services.tag_service import TagService
+from app.bootstrap.memory import (
+    build_memory_graph_repository,
+    build_memory_task_dispatcher,
+)
 from app.bootstrap.notebook import (
     build_document_storage,
     build_embedding_model,
@@ -25,12 +29,17 @@ from app.bootstrap.notebook import (
     build_task_dispatcher,
     build_web_crawler,
 )
+from app.domain.external.embedding import EmbeddingModel
 from app.domain.external.knowledge_search import KnowledgeSearch
 from app.domain.models.user import User
+from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.services.memory import LongTermMemoryManager
 from app.infrastructure.external.file_storage.cos_file_storage import CosFileStorage
 from app.infrastructure.external.health_checker.elasticsearch_health_checker import (
     ElasticsearchHealthChecker,
+)
+from app.infrastructure.external.health_checker.neo4j_health_checker import (
+    Neo4jHealthChecker,
 )
 from app.infrastructure.external.health_checker.postgres_health_checker import (
     PostgresHealthChecker,
@@ -51,6 +60,7 @@ from app.infrastructure.storage.elasticsearch import (
     KnowledgeElasticsearch,
     get_elasticsearch,
 )
+from app.infrastructure.storage.neo4j import Neo4j, get_neo4j
 from app.infrastructure.storage.postgres import get_db_session, get_uow
 from app.infrastructure.storage.redis import RedisClient, get_redis
 from core.config import get_settings
@@ -120,17 +130,19 @@ def get_status_service(
     db_session: AsyncSession = Depends(get_db_session),
     redis_client: RedisClient = Depends(get_redis),
     elasticsearch: KnowledgeElasticsearch = Depends(get_elasticsearch),
+    neo4j: Neo4j = Depends(get_neo4j),
 ) -> StatusService:
     """获取状态服务"""
     # 1.初始化基础设施状态检查
     postgres_checker = PostgresHealthChecker(db_session)
     redis_checker = RedisHealthChecker(redis_client)
     elasticsearch_checker = ElasticsearchHealthChecker(elasticsearch)
+    neo4j_checker = Neo4jHealthChecker(neo4j)
 
     # 2.创建服务并返回
     logger.info("加载获取StatusService")
     return StatusService(
-        checkers=[postgres_checker, redis_checker, elasticsearch_checker]
+        checkers=[postgres_checker, redis_checker, elasticsearch_checker, neo4j_checker]
     )
 
 
@@ -209,11 +221,18 @@ def get_document_service(
     )
 
 
-def get_memory_service(
+async def get_memory_service(
     current_user: User = Depends(require_active_user),
 ) -> MemoryService:
     """获取长期记忆服务"""
-    return MemoryService(uow_factory=get_uow, user_id=current_user.id)
+    memory_graph = await _build_optional_memory_graph(current_user.id)
+    return MemoryService(
+        uow_factory=get_uow,
+        user_id=current_user.id,
+        task_dispatcher=build_memory_task_dispatcher(),
+        graph_repository=memory_graph[0],
+        embedding=memory_graph[1],
+    )
 
 
 def get_session_service() -> SessionService:
@@ -243,6 +262,7 @@ async def get_agent_service(
     )
 
     # 实例化Agent服务并返回
+    memory_graph = await _build_optional_memory_graph(current_user.id)
     return AgentService(
         uow_factory=get_uow,
         llm=llm,
@@ -254,5 +274,20 @@ async def get_agent_service(
         json_parser=RepairJSONParser(),
         search_engine=BingSearchEngine,
         file_storage=file_storage,
-        memory=LongTermMemoryManager(uow_factory=get_uow, user_id=current_user.id),
+        memory=LongTermMemoryManager(
+            uow_factory=get_uow,
+            user_id=current_user.id,
+            graph_repository=memory_graph[0],
+            embedding=memory_graph[1],
+        ),
     )
+
+
+async def _build_optional_memory_graph(
+    user_id: str,
+) -> tuple[MemoryGraphRepository | None, EmbeddingModel | None]:
+    try:
+        return build_memory_graph_repository(), await build_embedding_model(user_id)
+    except Exception as e:
+        logger.warning("记忆图谱检索初始化失败，将使用 PG 记忆兜底: %s", e)
+        return None, None

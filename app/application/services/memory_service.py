@@ -1,7 +1,10 @@
 from typing import Callable
 
 from app.application.errors.exceptions import BadRequestError, NotFoundError
+from app.domain.external.embedding import EmbeddingModel
+from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource
+from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.memory import LongTermMemoryManager
 
@@ -9,11 +12,24 @@ from app.domain.services.memory import LongTermMemoryManager
 class MemoryService:
     """长期记忆应用服务。"""
 
-    def __init__(self, uow_factory: Callable[[], IUnitOfWork], user_id: str) -> None:
-        self._memory = LongTermMemoryManager(uow_factory=uow_factory, user_id=user_id)
+    def __init__(
+        self,
+        uow_factory: Callable[[], IUnitOfWork],
+        user_id: str,
+        task_dispatcher: TaskDispatcher | None = None,
+        graph_repository: MemoryGraphRepository | None = None,
+        embedding: EmbeddingModel | None = None,
+    ) -> None:
+        self._memory = LongTermMemoryManager(
+            uow_factory=uow_factory,
+            user_id=user_id,
+            task_dispatcher=task_dispatcher,
+            graph_repository=graph_repository,
+            embedding=embedding,
+        )
 
     async def remember_text(self, content: str) -> LongTermMemory:
-        """主动记住一段文本，V1 同步落为可检索记忆。"""
+        """主动记住一段文本，并异步萃取图谱。"""
         try:
             return await self._memory.remember_text(content, source=MemorySource.MANUAL)
         except ValueError as e:

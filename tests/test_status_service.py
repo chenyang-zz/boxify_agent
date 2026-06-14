@@ -3,6 +3,9 @@ import pytest
 from app.infrastructure.external.health_checker.elasticsearch_health_checker import (
     ElasticsearchHealthChecker,
 )
+from app.infrastructure.external.health_checker.neo4j_health_checker import (
+    Neo4jHealthChecker,
+)
 from app.infrastructure.external.health_checker.postgres_health_checker import (
     PostgresHealthChecker,
 )
@@ -52,6 +55,7 @@ def test_status_service_dependency_includes_elasticsearch_checker():
         db_session=FakeDbSession(),
         redis_client=FakeRedisClient(),
         elasticsearch=FakeElasticsearch(FakeElasticClient(True)),
+        neo4j=FakeNeo4j(),
     )
 
     checker_types = {type(checker) for checker in service._checkers}
@@ -60,6 +64,7 @@ def test_status_service_dependency_includes_elasticsearch_checker():
         PostgresHealthChecker,
         RedisHealthChecker,
         ElasticsearchHealthChecker,
+        Neo4jHealthChecker,
     }
 
 
@@ -83,4 +88,8 @@ class FakeDbSession:
 
 
 class FakeRedisClient:
+    pass
+
+
+class FakeNeo4j:
     pass

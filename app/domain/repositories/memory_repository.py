@@ -17,6 +17,11 @@ class MemoryRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_user_id_by_memory_id(self, memory_id: str) -> str | None:
+        """按记忆 ID 读取所属用户 ID，供异步任务定位配置。"""
+        ...
+
+    @abstractmethod
     async def list_by_user(
         self, user_id: str, page: int, page_size: int
     ) -> tuple[list[LongTermMemory], int]:

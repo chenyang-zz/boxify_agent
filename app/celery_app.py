@@ -9,5 +9,5 @@ celery_app = Celery(
     "boxify_notebook",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.notebook.document_parse"],
+    include=["app.tasks.notebook.document_parse", "app.tasks.memory.extract"],
 )

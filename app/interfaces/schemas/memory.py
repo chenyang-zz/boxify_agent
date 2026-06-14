@@ -22,6 +22,16 @@ class MemorySearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
 
 
+class MemoryGraphStatsResponse(BaseModel):
+    """长期记忆图谱萃取统计响应。"""
+
+    dialogue_id: str = ""
+    chunks: int = 0
+    statements: int = 0
+    entities: int = 0
+    relations: int = 0
+
+
 class MemoryResponse(BaseModel):
     """记忆响应。"""
 
@@ -32,6 +42,8 @@ class MemoryResponse(BaseModel):
     status: MemoryStatus
     summary: str | None
     keywords: list[str]
+    graph_dialogue_id: str | None
+    graph_stats: MemoryGraphStatsResponse
     error_msg: str | None
     created_at: datetime | None
     updated_at: datetime | None

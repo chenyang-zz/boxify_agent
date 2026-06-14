@@ -9,3 +9,9 @@ class CeleryTaskDispatcher(TaskDispatcher):
         from app.tasks.notebook.document_parse import parse_document_task
 
         parse_document_task.delay(document_id)
+
+    async def dispatch_extract_memory(self, memory_id: str) -> None:
+        """发送长期记忆图谱萃取任务到 broker。"""
+        from app.tasks.memory.extract import extract_memory_task
+
+        extract_memory_task.delay(memory_id)

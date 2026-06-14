@@ -7,3 +7,7 @@ class TaskDispatcher(Protocol):
     async def dispatch_parse_document(self, document_id: str) -> None:
         """派发文档解析任务，调用方不关心具体队列实现。"""
         ...
+
+    async def dispatch_extract_memory(self, memory_id: str) -> None:
+        """派发长期记忆图谱萃取任务。"""
+        ...
