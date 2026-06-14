@@ -1,0 +1,41 @@
+app/bootstrap/memory.py
+  s_44b7f7a2f18bd5::t_8530699e2cf18e 7,41
+  h_e1f1392360ad67 43
+app/domain/services/memory/manager.py
+  s_44b7f7a2f18bd5::t_68f98eef9e8158 104,126,144
+tests/test_memory_fact_extractor.py
+  s_44b7f7a2f18bd5::t_f66a1dd2e8c15b 1-188
+app/tasks/memory/extract.py
+  s_44b7f7a2f18bd5::t_68f98eef9e8158 65
+app/domain/services/memory/graph_extractor.py
+  s_44b7f7a2f18bd5::t_68f98eef9e8158 57,84,155,187
+  s_44b7f7a2f18bd5::t_68a0de67b33b7b 14-17,19,27,32,48-49,82
+app/domain/services/memory/fact_extractor.py
+  s_44b7f7a2f18bd5::t_0b4ecf571b39d7 1-143,145-155
+  s_44b7f7a2f18bd5::t_68f98eef9e8158 144
+tests/test_memory_graph_extractor.py
+  s_44b7f7a2f18bd5::t_633eada119b56e 3-7,9,14-80,84-85,96,125,128-131,151-184,199,217-223,225-227,229-230
+app/infrastructure/repositories/neo4j_memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_68f98eef9e8158 111,130,153,193,220,232,286,306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "9cf850a3684ae2ef3c9d21fb7b3529e0fd9f7025",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
