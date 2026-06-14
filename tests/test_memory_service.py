@@ -140,6 +140,35 @@ async def test_long_term_memory_manager_falls_back_to_pg_when_graph_errors():
 
 
 @pytest.mark.anyio
+async def test_long_term_memory_manager_uses_graph_fulltext_when_embedding_fails():
+    repository = InMemoryMemoryRepository()
+    graph_repository = FakeGraphRepository(
+        [
+            MemoryGraphResult(
+                entity_id="entity-1",
+                entity_name="周杰伦",
+                entity_type="生命体",
+                description="歌手",
+                score=0.7,
+                source_memory_summary="用户喜欢周杰伦",
+            )
+        ]
+    )
+    manager = LongTermMemoryManager(
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        user_id="user-a",
+        graph_repository=graph_repository,
+        embedding=ExplodingEmbedding(),
+    )
+
+    results = await manager.search("周杰伦", top_k=3)
+
+    assert results[0].graph_data is not None
+    assert results[0].graph_data.entity_name == "周杰伦"
+    assert graph_repository.calls == [("user-a", "周杰伦", 3, None)]
+
+
+@pytest.mark.anyio
 async def test_long_term_memory_manager_remembers_session_source():
     repository = InMemoryMemoryRepository()
     dispatcher = FakeTaskDispatcher()
@@ -293,6 +322,18 @@ class FakeEmbedding:
     @property
     def model_name(self):
         return "fake-embedding"
+
+
+class ExplodingEmbedding:
+    async def embed(self, texts):
+        raise RuntimeError("embedding unavailable")
+
+    async def embed_one(self, text):
+        raise RuntimeError("embedding unavailable")
+
+    @property
+    def model_name(self):
+        return "exploding-embedding"
 
 
 class MemoryUnitOfWork:

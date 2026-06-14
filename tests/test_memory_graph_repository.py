@@ -119,10 +119,107 @@ async def test_neo4j_repository_returns_one_hop_relationships_with_source_memory
     assert results[0].relations[0].evidence == "用户喜欢周杰伦。"
 
 
+@pytest.mark.anyio
+async def test_neo4j_repository_search_orders_before_fetching_neighbors_and_fuses_hits():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "fulltext.queryNodes": [
+                {
+                    "entity": {
+                        "id": "entity-1",
+                        "name": "周杰伦",
+                        "type": "生命体",
+                        "description": "歌手",
+                    },
+                    "relations": [],
+                    "score": 0.4,
+                }
+            ],
+            "vector.queryNodes": [
+                {
+                    "entity": {
+                        "id": "entity-1",
+                        "name": "周杰伦",
+                        "type": "生命体",
+                        "description": "歌手",
+                    },
+                    "relations": [],
+                    "score": 0.9,
+                },
+                {
+                    "entity": {
+                        "id": "entity-2",
+                        "name": "林俊杰",
+                        "type": "生命体",
+                        "description": "歌手",
+                    },
+                    "relations": [],
+                    "score": 0.7,
+                },
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    results = await repository.search(
+        user_id="user-a",
+        query="喜欢的歌手",
+        top_k=2,
+        query_embedding=[0.1, 0.2],
+    )
+
+    assert [result.entity_id for result in results] == ["entity-1", "entity-2"]
+    assert results[0].score == pytest.approx(0.85)
+    assert results[1].score == pytest.approx(0)
+    search_queries = [query for query, _ in driver.executed if "queryNodes" in query]
+    assert len(search_queries) == 2
+    for query in search_queries:
+        assert query.index("ORDER BY score DESC") < query.index("OPTIONAL MATCH")
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_lists_existing_entities_by_type_for_dedup():
+    driver = FakeNeo4jDriver(
+        result_rows=[
+            {
+                "id": "entity-1",
+                "name": "用户",
+                "type": "生命体",
+                "description": "当前用户",
+            }
+        ]
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    rows = await repository.list_entities_by_type("user-a", "生命体")
+
+    assert rows == [
+        EntityNode(
+            id="entity-1",
+            user_id="user-a",
+            name="用户",
+            type="生命体",
+            description="当前用户",
+        )
+    ]
+    query, params = driver.executed[-1]
+    assert "MATCH (entity:Entity {user_id: $user_id, type: $entity_type})" in query
+    assert params == {"user_id": "user-a", "entity_type": "生命体"}
+
+
 class FakeNeo4jDriver:
-    def __init__(self, result_rows=None):
+    def __init__(self, result_rows=None, result_rows_by_keyword=None):
         self.executed = []
         self.result_rows = result_rows or []
+        self.result_rows_by_keyword = result_rows_by_keyword or {}
 
     def session(self, database=None):
         return FakeNeo4jSession(self, database)
@@ -141,11 +238,17 @@ class FakeNeo4jSession:
 
     async def run(self, query, **params):
         self.driver.executed.append((query, params))
-        return FakeNeo4jResult(self.driver.result_rows)
+        return FakeNeo4jResult(self._rows_for_query(query))
 
     async def execute_write(self, callback, *args):
         tx = FakeNeo4jTransaction(self.driver)
         return await callback(tx, *args)
+
+    def _rows_for_query(self, query):
+        for keyword, rows in self.driver.result_rows_by_keyword.items():
+            if keyword in query:
+                return rows
+        return self.driver.result_rows
 
 
 class FakeNeo4jTransaction:

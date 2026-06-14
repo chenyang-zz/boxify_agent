@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from app.domain.models.memory_graph import MemoryGraph, MemoryGraphResult
+from app.domain.models.memory_graph import EntityNode, MemoryGraph, MemoryGraphResult
 
 
 class MemoryGraphRepository(Protocol):
@@ -8,6 +8,12 @@ class MemoryGraphRepository(Protocol):
 
     async def save_graph(self, graph: MemoryGraph) -> None:
         """保存记忆图谱。"""
+        ...
+
+    async def list_entities_by_type(
+        self, user_id: str, entity_type: str
+    ) -> list[EntityNode]:
+        """按用户和类型列出已有实体，用于写图前去重融合。"""
         ...
 
     async def search(

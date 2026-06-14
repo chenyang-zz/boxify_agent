@@ -37,6 +37,10 @@ class StatementNode(BaseModel):
     chunk_id: str
     index: int
     text: str
+    statement_type: str = "FACT"
+    temporal_type: str = "STATIC"
+    importance: float = 0.5
+    confidence: float = 0.8
 
 
 class EntityNode(BaseModel):
@@ -48,6 +52,8 @@ class EntityNode(BaseModel):
     type: str
     description: str = ""
     embedding: list[float] = Field(default_factory=list)
+    importance: float = 0.5
+    confidence: float = 0.8
 
 
 class RelationEdge(BaseModel):
@@ -60,6 +66,8 @@ class RelationEdge(BaseModel):
     statement_id: str
     name: str
     evidence: str
+    importance: float = 0.5
+    confidence: float = 0.8
 
 
 class MentionEdge(BaseModel):

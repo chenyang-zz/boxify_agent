@@ -1,8 +1,7 @@
 import json
-import re
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.external.embedding import EmbeddingModel
 from app.domain.external.json_parser import JSONParser
@@ -19,6 +18,7 @@ from app.domain.models.memory_graph import (
     stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
+from app.domain.services.memory.ontology import normalize_entity_type, normalize_predicate
 from app.domain.services.prompts.memory import (
     EXTRACT_STATEMENTS_PROMPT,
     EXTRACT_STATEMENTS_SYSTEM_PROMPT,
@@ -30,25 +30,48 @@ from app.domain.services.prompts.memory import (
 class ExtractedEntity(BaseModel):
     """LLM 萃取出的实体。"""
 
+    model_config = ConfigDict(extra="ignore")
+
+    entity_idx: int = 0
     name: str
     type: str = "Thing"
     description: str = ""
+    importance: float = 0.5
+    confidence: float = 0.8
 
 
 class ExtractedTriplet(BaseModel):
     """LLM 萃取出的实体三元组。"""
 
-    head: ExtractedEntity
-    relation: str
-    tail: ExtractedEntity
+    model_config = ConfigDict(extra="ignore")
+
+    subject_id: int = 0
+    predicate: str = ""
+    object_id: int = 0
     evidence: str
+    importance: float = 0.5
+    confidence: float = 0.8
+
+
+class ExtractedStatement(BaseModel):
+    """LLM 萃取出的结构化原子陈述。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    statement: str = ""
+    statement_type: str = "FACT"
+    temporal_type: str = "STATIC"
+    has_unsolved_reference: bool = False
+    importance: float = 0.5
+    confidence: float = 0.8
 
 
 class _ExtractedStatements(BaseModel):
-    statements: list[dict[str, str]] = Field(default_factory=list)
+    statements: list[ExtractedStatement] = Field(default_factory=list)
 
 
 class _ExtractedTriplets(BaseModel):
+    entities: list[ExtractedEntity] = Field(default_factory=list)
     triplets: list[ExtractedTriplet] = Field(default_factory=list)
 
 
@@ -128,8 +151,10 @@ class MemoryGraphExtractor:
             )
             parsed = await self._parse_json(response.get("content"), {"statements": []})
             extracted = _ExtractedStatements.model_validate(parsed)
-            for raw in extracted.statements:
-                text = str(raw.get("text", "")).strip()
+            for statement in extracted.statements:
+                text = statement.statement.strip()
+                if statement.has_unsolved_reference:
+                    continue
                 if not text:
                     continue
                 index = len(statements)
@@ -142,15 +167,19 @@ class MemoryGraphExtractor:
                         chunk_id=chunk.id,
                         index=index,
                         text=text,
+                        statement_type=statement.statement_type,
+                        temporal_type=statement.temporal_type,
+                        importance=statement.importance,
+                        confidence=statement.confidence,
                     )
                 )
         return statements
 
     async def _extract_triplets(
         self, statements: list[StatementNode]
-    ) -> list[ExtractedTriplet]:
+    ) -> _ExtractedTriplets:
         if not statements:
-            return []
+            return _ExtractedTriplets()
         response = await self._llm.invoke(
             messages=[
                 {
@@ -166,29 +195,29 @@ class MemoryGraphExtractor:
             ],
             response_format={"type": "json_object"},
         )
-        parsed = await self._parse_json(response.get("content"), {"triplets": []})
-        return _ExtractedTriplets.model_validate(parsed).triplets
+        parsed = await self._parse_json(
+            response.get("content"), {"entities": [], "triplets": []}
+        )
+        return _ExtractedTriplets.model_validate(parsed)
 
     async def _build_graph(
         self,
         dialogue: DialogueNode,
         chunks: list[ChunkNode],
         statements: list[StatementNode],
-        triplets: list[ExtractedTriplet],
+        triplet_result: _ExtractedTriplets,
     ) -> MemoryGraph:
-        entity_by_key: dict[tuple[str, str], EntityNode] = {}
+        entity_by_idx = await self._build_entities(dialogue.user_id, triplet_result.entities)
         relations: list[RelationEdge] = []
         mentions_by_key: dict[tuple[str, str], MentionEdge] = {}
         statement_by_text = {statement.text: statement for statement in statements}
         fallback_statement = statements[0] if statements else None
 
-        for triplet in triplets:
-            head = self._get_or_create_entity(
-                dialogue.user_id, triplet.head, entity_by_key
-            )
-            tail = self._get_or_create_entity(
-                dialogue.user_id, triplet.tail, entity_by_key
-            )
+        for triplet in triplet_result.triplets:
+            head = entity_by_idx.get(triplet.subject_id)
+            tail = entity_by_idx.get(triplet.object_id)
+            if not head or not tail:
+                continue
             statement = statement_by_text.get(triplet.evidence, fallback_statement)
             if not statement:
                 continue
@@ -210,7 +239,7 @@ class MemoryGraphExtractor:
                     id=stable_memory_graph_id(
                         dialogue.user_id,
                         head.id,
-                        triplet.relation,
+                        triplet.predicate,
                         tail.id,
                         statement.id,
                     ),
@@ -218,12 +247,14 @@ class MemoryGraphExtractor:
                     source_entity_id=head.id,
                     target_entity_id=tail.id,
                     statement_id=statement.id,
-                    name=self._normalize_relation(triplet.relation),
+                    name=normalize_predicate(triplet.predicate),
                     evidence=triplet.evidence or statement.text,
+                    importance=triplet.importance,
+                    confidence=triplet.confidence,
                 )
             )
 
-        entities = list(entity_by_key.values())
+        entities = list({entity.id: entity for entity in entity_by_idx.values()}.values())
         if entities:
             vectors = await self._embedding.embed(
                 [
@@ -243,27 +274,61 @@ class MemoryGraphExtractor:
             relations=relations,
         )
 
-    @classmethod
-    def _get_or_create_entity(
-        cls,
-        user_id: str,
-        extracted: ExtractedEntity,
-        entity_by_key: dict[tuple[str, str], EntityNode],
-    ) -> EntityNode:
-        name = extracted.name.strip()
-        entity_type = extracted.type.strip() or "Thing"
-        key = (name.lower(), entity_type.lower())
-        if key not in entity_by_key:
-            entity_by_key[key] = EntityNode(
-                id=stable_memory_graph_id(
-                    user_id, "entity", name.lower(), entity_type.lower()
+    async def _build_entities(
+        self, user_id: str, extracted_entities: list[ExtractedEntity]
+    ) -> dict[int, EntityNode]:
+        entity_by_key: dict[tuple[str, str], EntityNode] = {}
+        entity_by_idx: dict[int, EntityNode] = {}
+        for extracted in extracted_entities:
+            name = extracted.name.strip()
+            if not name:
+                continue
+            entity_type = normalize_entity_type(extracted.type)
+            key = (name.lower(), entity_type)
+            if key not in entity_by_key:
+                entity_by_key[key] = EntityNode(
+                    id=stable_memory_graph_id(
+                        user_id,
+                        "entity",
+                        name.lower(),
+                        entity_type.lower(),
+                    ),
+                    user_id=user_id,
+                    name=name,
+                    type=entity_type,
+                    description=extracted.description.strip(),
+                    importance=extracted.importance,
+                    confidence=extracted.confidence,
+                )
+            entity_by_idx[extracted.entity_idx] = entity_by_key[key]
+
+        await self._merge_entities_with_graph(user_id, list(entity_by_key.values()))
+        return entity_by_idx
+
+    async def _merge_entities_with_graph(
+        self, user_id: str, entities: list[EntityNode]
+    ) -> None:
+        cache: dict[str, list[EntityNode]] = {}
+        for entity in entities:
+            if entity.type not in cache:
+                cache[entity.type] = await self._graph_repository.list_entities_by_type(
+                    user_id, entity.type
+                )
+            norm_name = entity.name.strip().lower()
+            existing = next(
+                (
+                    existing_entity
+                    for existing_entity in cache[entity.type]
+                    if existing_entity.name.strip().lower() == norm_name
                 ),
-                user_id=user_id,
-                name=name,
-                type=entity_type,
-                description=extracted.description.strip(),
+                None,
             )
-        return entity_by_key[key]
+            if not existing:
+                continue
+            entity.id = existing.id
+            old_description = existing.description
+            if len(old_description) > len(entity.description):
+                entity.description = old_description
 
     async def _parse_json(self, content: Any, default_value: dict[str, Any]) -> Any:
         if not isinstance(content, str):
@@ -277,8 +342,3 @@ class MemoryGraphExtractor:
         if not isinstance(parsed, dict):
             return default_value
         return parsed
-
-    @staticmethod
-    def _normalize_relation(relation: str) -> str:
-        normalized = re.sub(r"[^0-9a-zA-Z_]+", "_", relation.strip().upper())
-        return normalized.strip("_") or "RELATED_TO"

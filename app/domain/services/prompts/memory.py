@@ -1,19 +1,34 @@
-# 长期记忆图谱萃取提示词模板
+from app.domain.services.memory.ontology import format_ontology_for_prompt
 
 EXTRACT_STATEMENTS_SYSTEM_PROMPT = """
-将用户长期记忆拆成原子陈述，返回 JSON。
+将用户长期记忆拆成原子陈述，完成指代消解，并返回严格 JSON。
 """
 
 EXTRACT_STATEMENTS_PROMPT = """
-只返回形如 {{"statements":[{{"text":"..."}}]}} 的 JSON。
+只返回形如 {{"statements":[{{"statement":"...","statement_type":"FACT","temporal_type":"STATIC","has_unsolved_reference":false,"importance":0.5,"confidence":0.8}}]}} 的 JSON。
+要求：
+- 每条 statement 只表达一个事实、偏好、观点或目标。
+- 将“我/我的”统一改写为“用户”。
+- 如果指代无法消解，has_unsolved_reference 置为 true。
+- statement_type 只能是 FACT / OPINION / PREDICTION / SUGGESTION。
+- temporal_type 只能是 STATIC / DYNAMIC / ATEMPORAL。
 文本：{text}
 """
 
 EXTRACT_TRIPLETS_SYSTEM_PROMPT = """
-从原子陈述中抽取实体三元组，返回 JSON。
+从原子陈述中抽取实体和实体关系三元组，返回严格 JSON。
 """
 
-EXTRACT_TRIPLETS_PROMPT = """
-只返回形如 {{"triplets":[{{"head":{{"name":"...","type":"...","description":"..."}},"relation":"...","tail":{{"name":"...","type":"...","description":"..."}},"evidence":"..."}}]}} 的 JSON。
+EXTRACT_TRIPLETS_PROMPT = (
+    format_ontology_for_prompt()
+    + """
+
+只返回形如 {{"entities":[{{"entity_idx":1,"name":"用户","type":"生命体","description":"当前用户","importance":0.5,"confidence":0.8}}],"triplets":[{{"subject_id":1,"predicate":"偏好","object_id":2,"evidence":"用户喜欢周杰伦。","importance":0.5,"confidence":0.8}}]}} 的 JSON。
+要求：
+- entities[].type 必须来自实体类型词表；拿不准时填“其他”。
+- triplets[].predicate 必须来自关系谓词词表；拿不准时填“关联于”。
+- subject_id/object_id 必须引用 entities[].entity_idx。
+- 不要输出事件节点或时间线。
 陈述：{statements}
 """
+)
