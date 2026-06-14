@@ -3,12 +3,10 @@ import inspect
 import logging
 from collections.abc import Awaitable, Callable
 
-from app.application.services.app_config_service import AppConfigService
-from app.bootstrap.memory import build_memory_graph_extractor
+from app.bootstrap.memory import build_memory_graph_extractor_for_user
 from app.celery_app import celery_app
 from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
-from app.infrastructure.external.llm.openai_llm import OpenAILLM
 from app.infrastructure.storage.neo4j import get_neo4j
 from app.infrastructure.storage.postgres import get_postgres, get_uow
 
@@ -70,20 +68,11 @@ async def _run(memory_id: str) -> None:
         await run_extract_memory(
             memory_id=memory_id,
             uow_factory=get_uow,
-            pipeline_factory=_build_pipeline,
+            pipeline_factory=build_memory_graph_extractor_for_user,
         )
     finally:
         await get_neo4j().shutdown()
         await get_postgres().shutdown()
-
-
-async def _build_pipeline(user_id: str) -> MemoryGraphExtractor:
-    app_config = await AppConfigService(
-        uow_factory=get_uow,
-        user_id=user_id,
-    ).get_app_config()
-    llm = OpenAILLM(app_config.llm_config)
-    return await build_memory_graph_extractor(user_id=user_id, llm=llm)
 
 
 async def _find_memory_user(uow: IUnitOfWork, memory_id: str) -> str | None:

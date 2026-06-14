@@ -3,12 +3,15 @@
 from app.bootstrap.notebook import build_embedding_model, build_task_dispatcher
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
+from app.domain.models.app_config import AppConfig
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
 from app.infrastructure.external.json_parser.repair_json_parser import RepairJSONParser
+from app.infrastructure.external.llm.openai_llm import OpenAILLM
 from app.infrastructure.repositories.neo4j_memory_graph_repository import (
     Neo4jMemoryGraphRepository,
 )
 from app.infrastructure.storage.neo4j import get_neo4j
+from app.infrastructure.storage.postgres import get_uow
 from core.config import get_settings
 
 settings = get_settings()
@@ -40,6 +43,19 @@ async def build_memory_graph_extractor(
         json_parser=RepairJSONParser(),
         graph_repository=build_memory_graph_repository(),
     )
+
+
+async def build_memory_graph_extractor_for_user(user_id: str) -> MemoryGraphExtractor:
+    """按用户应用配置组装记忆图谱萃取流水线。"""
+    app_config = await _load_user_app_config(user_id)
+    llm = OpenAILLM(app_config.llm_config)
+    return await build_memory_graph_extractor(user_id=user_id, llm=llm)
+
+
+async def _load_user_app_config(user_id: str) -> AppConfig:
+    """通过 UoW 读取当前用户应用配置，不依赖应用层服务。"""
+    async with get_uow() as uow:
+        return await uow.app_config.get_or_create_default(user_id)
 
 
 async def ensure_memory_graph_schema() -> None:
