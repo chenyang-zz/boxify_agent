@@ -32,3 +32,17 @@ EXTRACT_TRIPLETS_PROMPT = (
 陈述：{statements}
 """
 )
+
+PROFILE_SUMMARY_SYSTEM_PROMPT = "你是记忆图谱画像增强器，只返回严格 JSON。"
+
+PROFILE_SUMMARY_PROMPT = (
+    "请基于实体相关陈述，生成长期记忆画像。\n"
+    "只返回 JSON："
+    '{{"core_facts":["..."],"traits":["..."]}}\n'
+    "要求：\n"
+    "- core_facts 是稳定、可复用的事实，最多 8 条。\n"
+    "- traits 是偏好、倾向、习惯或风格，最多 8 条。\n"
+    "- 不要编造陈述中没有的信息。\n"
+    "实体：{entity_name}（{entity_type}）\n"
+    "陈述：{statements}"
+)

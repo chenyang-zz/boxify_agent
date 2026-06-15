@@ -4,10 +4,14 @@ from app.application.errors.exceptions import BadRequestError, NotFoundError
 from app.application.services.memory_service import MemoryService
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource, MemoryStatus
 from app.domain.models.memory_graph import (
+    EntityNode,
     GraphRelationFact,
+    MemoryConsolidationStats,
     MemoryGraphResult,
+    MemoryPromotionStats,
 )
-from app.domain.services.memory import LongTermMemoryManager
+from app.domain.services.memory import LongTermMemoryManager, MemoryConsolidator
+from app.domain.services.memory.profile_summarizer import MemoryProfileSummarizer
 
 
 @pytest.mark.anyio
@@ -166,6 +170,130 @@ async def test_long_term_memory_manager_uses_graph_fulltext_when_embedding_fails
     assert results[0].graph_data is not None
     assert results[0].graph_data.entity_name == "周杰伦"
     assert graph_repository.calls == [("user-a", "周杰伦", 3, None)]
+
+
+@pytest.mark.anyio
+async def test_memory_consolidation_service_promotes_and_enhances_profiles():
+    repository = FakeConsolidationGraphRepository()
+    service = MemoryConsolidator(
+        user_id="user-a",
+        graph_repository=repository,
+        profile_summarizer=FakeProfileSummarizer(
+            core_facts=["用户长期喜欢周杰伦"],
+            traits=["偏好华语流行"],
+        ),
+    )
+
+    stats = await service.consolidate()
+
+    assert stats == MemoryConsolidationStats(
+        promoted_entities=2,
+        promoted_statements=3,
+        enhanced_profiles=1,
+    )
+    assert repository.promote_calls == [
+        {
+            "user_id": "user-a",
+            "min_access": 3,
+            "min_importance": 0.8,
+            "min_mention": 3,
+        }
+    ]
+    assert repository.profile_writes == [
+        (
+            "user-a",
+            "entity-1",
+            ["用户长期喜欢周杰伦"],
+            ["偏好华语流行"],
+        )
+    ]
+
+
+@pytest.mark.anyio
+async def test_memory_consolidation_service_skips_single_profile_failure():
+    repository = FakeConsolidationGraphRepository(
+        top_entities=[
+            EntityNode(id="entity-1", user_id="user-a", name="周杰伦", type="生命体"),
+            EntityNode(id="entity-2", user_id="user-a", name="林俊杰", type="生命体"),
+        ]
+    )
+    service = MemoryConsolidator(
+        user_id="user-a",
+        graph_repository=repository,
+        profile_summarizer=FlakyProfileSummarizer(),
+    )
+
+    stats = await service.consolidate()
+
+    assert stats.enhanced_profiles == 1
+    assert repository.profile_writes == [
+        ("user-a", "entity-2", ["可用事实"], ["可用特质"])
+    ]
+
+
+@pytest.mark.anyio
+async def test_memory_profile_summarizer_parses_profile_json():
+    summarizer = MemoryProfileSummarizer(
+        llm=FakeProfileLLM(
+            '{"core_facts":["用户长期喜欢周杰伦"],"traits":["偏好华语流行"]}'
+        ),
+        json_parser=FakeJSONParser(),
+    )
+
+    core_facts, traits = await summarizer.summarize(
+        EntityNode(id="entity-1", user_id="user-a", name="周杰伦", type="生命体"),
+        ["用户喜欢周杰伦。", "用户经常听周杰伦的歌。"],
+    )
+
+    assert core_facts == ["用户长期喜欢周杰伦"]
+    assert traits == ["偏好华语流行"]
+
+
+@pytest.mark.anyio
+async def test_memory_profile_summarizer_falls_back_for_bad_json():
+    summarizer = MemoryProfileSummarizer(
+        llm=FakeProfileLLM("not-json"),
+        json_parser=FakeJSONParser(),
+    )
+
+    assert await summarizer.summarize(
+        EntityNode(id="entity-1", user_id="user-a", name="周杰伦", type="生命体"),
+        ["用户喜欢周杰伦。", "用户经常听周杰伦的歌。"],
+    ) == ([], [])
+
+
+@pytest.mark.anyio
+async def test_memory_profile_summarizer_falls_back_for_non_dict_json():
+    summarizer = MemoryProfileSummarizer(
+        llm=FakeProfileLLM('["not-object"]'),
+        json_parser=FakeJSONParser(),
+    )
+
+    assert await summarizer.summarize(
+        EntityNode(id="entity-1", user_id="user-a", name="周杰伦", type="生命体"),
+        ["用户喜欢周杰伦。", "用户经常听周杰伦的歌。"],
+    ) == ([], [])
+
+
+@pytest.mark.anyio
+async def test_memory_profile_summarizer_coerces_short_string_lists():
+    summarizer = MemoryProfileSummarizer(
+        llm=FakeProfileLLM(
+            {
+                "core_facts": ["  稳定事实  ", "", "x" * 250],
+                "traits": ["偏好华语流行", None],
+            }
+        ),
+        json_parser=FakeJSONParser(),
+    )
+
+    core_facts, traits = await summarizer.summarize(
+        EntityNode(id="entity-1", user_id="user-a", name="周杰伦", type="生命体"),
+        ["用户喜欢周杰伦。", "用户经常听周杰伦的歌。"],
+    )
+
+    assert core_facts == ["稳定事实", "x" * 200]
+    assert traits == ["偏好华语流行", "None"]
 
 
 @pytest.mark.anyio
@@ -334,6 +462,93 @@ class ExplodingEmbedding:
     @property
     def model_name(self):
         return "exploding-embedding"
+
+
+class FakeConsolidationGraphRepository(FakeGraphRepository):
+    def __init__(self, top_entities=None):
+        super().__init__([])
+        self.promote_calls = []
+        self.profile_writes = []
+        self.top_entities = top_entities or [
+            EntityNode(id="entity-1", user_id="user-a", name="周杰伦", type="生命体")
+        ]
+
+    async def promote_short_to_long(
+        self, user_id, min_access, min_importance, min_mention, age_before
+    ):
+        self.promote_calls.append(
+            {
+                "user_id": user_id,
+                "min_access": min_access,
+                "min_importance": min_importance,
+                "min_mention": min_mention,
+            }
+        )
+        assert age_before
+        return MemoryPromotionStats(promoted_entities=2, promoted_statements=3)
+
+    async def top_long_term_entities(self, user_id, top_k):
+        assert user_id == "user-a"
+        assert top_k == 20
+        return self.top_entities
+
+    async def entity_statements(self, user_id, entity_id):
+        assert user_id == "user-a"
+        return ["用户喜欢周杰伦。", "用户经常听周杰伦的歌。"]
+
+    async def write_entity_profile(self, user_id, entity_id, core_facts, traits):
+        self.profile_writes.append((user_id, entity_id, core_facts, traits))
+
+
+class FakeProfileSummarizer:
+    def __init__(self, core_facts=None, traits=None):
+        self.core_facts = core_facts or []
+        self.traits = traits or []
+        self.calls = []
+
+    async def summarize(self, entity, statements):
+        self.calls.append((entity.id, statements))
+        return self.core_facts, self.traits
+
+
+class FlakyProfileSummarizer:
+    def __init__(self):
+        self.calls = 0
+
+    async def summarize(self, entity, statements):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("profile failed")
+        return ["可用事实"], ["可用特质"]
+
+
+class FakeProfileLLM:
+    def __init__(self, content):
+        self.content = content
+
+    async def invoke(self, messages, tools=None, response_format=None, tool_choice=None):
+        assert response_format == {"type": "json_object"}
+        assert "core_facts" in messages[-1]["content"]
+        return {"content": self.content}
+
+    @property
+    def model_name(self):
+        return "fake-profile-llm"
+
+    @property
+    def temperature(self):
+        return 0
+
+    @property
+    def max_tokens(self):
+        return 0
+
+
+class FakeJSONParser:
+    async def invoke(self, text, default_value=None):
+        import json
+
+        return json.loads(text)
 
 
 class MemoryUnitOfWork:

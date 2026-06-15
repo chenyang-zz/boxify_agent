@@ -22,6 +22,14 @@ class MemorySearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
 
 
+class MemoryConsolidateResponse(BaseModel):
+    """手动记忆巩固统计响应。"""
+
+    promoted_entities: int = 0
+    promoted_statements: int = 0
+    enhanced_profiles: int = 0
+
+
 class MemoryGraphStatsResponse(BaseModel):
     """长期记忆图谱萃取统计响应。"""
 

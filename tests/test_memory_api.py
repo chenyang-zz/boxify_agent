@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.application.services.auth_service import AuthService
 from app.application.services.memory_service import MemoryService
+from app.domain.models.memory_graph import MemoryConsolidationStats
 from app.domain.models.user import User
 from app.interfaces import service_dependencies
 from app.main import app
@@ -63,6 +64,42 @@ def test_create_and_search_memory_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_consolidate_memory_returns_stats_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeConsolidateMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.post(
+        "/api/memories/consolidate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "promoted_entities": 2,
+        "promoted_statements": 3,
+        "enhanced_profiles": 1,
+    }
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -111,3 +148,12 @@ class MemoryApiUnitOfWork:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return None
+
+
+class FakeConsolidateMemoryService:
+    async def consolidate(self):
+        return MemoryConsolidationStats(
+            promoted_entities=2,
+            promoted_statements=3,
+            enhanced_profiles=1,
+        )

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from app.application.services.memory_service import MemoryService
 from app.interfaces.schemas.base import PageData, Response
 from app.interfaces.schemas.memory import (
+    MemoryConsolidateResponse,
     MemoryCreateRequest,
     MemoryResponse,
     MemorySearchRequest,
@@ -66,6 +67,23 @@ async def search_memories(
     memories = await memory_service.search(body.query, body.top_k)
     return Response.success(
         data=[MemoryResponse.from_domain(memory) for memory in memories]
+    )
+
+
+@router.post(
+    "/consolidate",
+    response_model=Response[MemoryConsolidateResponse],
+    summary="手动巩固记忆",
+    description="对当前用户执行一次记忆动力学巩固和长期实体画像增强。",
+)
+async def consolidate_memories(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """手动巩固当前用户记忆。"""
+    stats = await memory_service.consolidate()
+    return Response.success(
+        msg="记忆巩固完成",
+        data=MemoryConsolidateResponse.model_validate(stats.model_dump()),
     )
 
 

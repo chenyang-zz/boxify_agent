@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     neo4j_username: str = "neo4j"
     neo4j_password: str = Field(default="neo4j-password", repr=False)
     neo4j_database: str = "neo4j"
+    memory_consolidate_min_access: int = 3
+    memory_consolidate_min_importance: float = 0.8
+    memory_consolidate_min_mention: int = 3
+    memory_consolidate_min_age_hours: int = 24
+    memory_consolidate_profile_top_k: int = 20
 
     # Elasticsearch配置
     elasticsearch_url: str = "http://localhost:9200"
