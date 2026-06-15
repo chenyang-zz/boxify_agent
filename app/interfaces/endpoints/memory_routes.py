@@ -7,6 +7,7 @@ from app.interfaces.schemas.base import PageData, Response
 from app.interfaces.schemas.memory import (
     MemoryConsolidateResponse,
     MemoryCreateRequest,
+    MemoryReflectResponse,
     MemoryResponse,
     MemorySearchRequest,
 )
@@ -84,6 +85,23 @@ async def consolidate_memories(
     return Response.success(
         msg="记忆巩固完成",
         data=MemoryConsolidateResponse.model_validate(stats.model_dump()),
+    )
+
+
+@router.post(
+    "/reflect",
+    response_model=Response[MemoryReflectResponse],
+    summary="手动反思记忆",
+    description="对当前用户执行一次长期记忆反思并生成高层洞察。",
+)
+async def reflect_memories(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """手动反思当前用户记忆。"""
+    stats = await memory_service.reflect()
+    return Response.success(
+        msg="记忆反思完成",
+        data=MemoryReflectResponse.model_validate(stats.model_dump()),
     )
 
 

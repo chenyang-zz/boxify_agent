@@ -15,3 +15,7 @@ class TaskDispatcher(Protocol):
     async def dispatch_consolidate_memory(self, user_id: str) -> None:
         """派发当前用户长期记忆巩固任务。"""
         ...
+
+    async def dispatch_reflect_memory(self, user_id: str, entity_count: int) -> bool:
+        """累计当前用户新增实体数，并在达到阈值时派发反思任务。"""
+        ...

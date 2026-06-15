@@ -30,6 +30,14 @@ class MemoryConsolidateResponse(BaseModel):
     enhanced_profiles: int = 0
 
 
+class MemoryReflectResponse(BaseModel):
+    """手动记忆反思统计响应。"""
+
+    insights: int = 0
+    skipped: str | None = None
+    error: str | None = None
+
+
 class MemoryGraphStatsResponse(BaseModel):
     """长期记忆图谱萃取统计响应。"""
 

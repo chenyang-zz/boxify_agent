@@ -39,7 +39,7 @@ from app.domain.models.search import SearchResults
 from app.domain.models.session import SessionStatus
 from app.domain.models.tool_result import ToolResult
 from app.domain.repositories.vow import IUnitOfWork
-from app.domain.services.memory import MemorySearch
+from app.domain.services.memory import MemoryActiveRecall, MemorySearch
 from app.domain.services.flows.planner_react import PlannerReActFlow
 from app.domain.services.tools.a2a import A2ATool
 from app.domain.services.tools.mcp import MCPTool
@@ -64,6 +64,7 @@ class AgentTaskRunner(TaskRunner):
         search_engine: SearchEngine,  # 搜索引擎
         sandbox: Sandbox,  # 沙箱
         memory: MemorySearch | None = None,
+        active_recall: MemoryActiveRecall | None = None,
     ) -> None:
         """构造函数，完成Agent任务运行器的创建"""
         self._uow_factory = uow_factory
@@ -87,6 +88,7 @@ class AgentTaskRunner(TaskRunner):
             mcp_tool=self._mcp_tool,
             a2a_tool=self._a2a_tool,
             memory=memory,
+            active_recall=active_recall,
         )
 
     async def _put_and_add_event(

@@ -1,4 +1,16 @@
 from app.domain.external.task_dispatcher import TaskDispatcher
+from app.infrastructure.storage.redis import get_redis
+from app.tasks.memory.reflect import reflect_memory_task
+from core.config import get_settings
+
+_REFLECTION_TRIGGER_SCRIPT = """
+local total = redis.call('INCRBY', KEYS[1], ARGV[1])
+if total >= tonumber(ARGV[2]) then
+    redis.call('DEL', KEYS[1])
+    return 1
+end
+return 0
+"""
 
 
 class CeleryTaskDispatcher(TaskDispatcher):
@@ -21,3 +33,22 @@ class CeleryTaskDispatcher(TaskDispatcher):
         from app.tasks.memory.consolidate import consolidate_memory_task
 
         consolidate_memory_task.delay(user_id)
+
+    async def dispatch_reflect_memory(self, user_id: str, entity_count: int) -> bool:
+        """累计实体数，达到阈值时原子清零并发送长期记忆反思任务。"""
+        if entity_count <= 0:
+            return False
+        settings = get_settings()
+        key = f"memory:reflection:pending:{user_id}"
+        should_dispatch = await get_redis().client.eval(
+            _REFLECTION_TRIGGER_SCRIPT,
+            1,
+            key,
+            entity_count,
+            settings.memory_reflection_trigger_threshold,
+        )
+        if int(should_dispatch) != 1:
+            return False
+
+        reflect_memory_task.delay(user_id)
+        return True

@@ -13,5 +13,6 @@ celery_app = Celery(
         "app.tasks.notebook.document_parse",
         "app.tasks.memory.extract",
         "app.tasks.memory.consolidate",
+        "app.tasks.memory.reflect",
     ],
 )

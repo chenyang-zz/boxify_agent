@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Self
 
-from sqlalchemy import DateTime, ForeignKeyConstraint, JSON, PrimaryKeyConstraint, String, Text, text
+from sqlalchemy import DateTime, ForeignKeyConstraint, PrimaryKeyConstraint, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.models.long_term_memory import LongTermMemory
@@ -27,9 +28,9 @@ class MemoryModel(Base):
     source_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    keywords: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     graph_dialogue_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    graph_stats: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    graph_stats: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,

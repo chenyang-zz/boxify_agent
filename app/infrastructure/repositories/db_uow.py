@@ -13,7 +13,9 @@ from typing import Optional, Self, cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.repositories.vow import IUnitOfWork
-from app.infrastructure.repositories.db_app_config_repository import DBAppConfigRepository
+from app.infrastructure.repositories.db_app_config_repository import (
+    DBAppConfigRepository,
+)
 from app.infrastructure.repositories.db_document_repository import DBDocumentRepository
 from app.infrastructure.repositories.db_file_repository import DBFileRepository
 from app.infrastructure.repositories.db_memory_repository import DBMemoryRepository
@@ -50,6 +52,46 @@ class DBUnitOfWork(IUnitOfWork):
             raise RuntimeError("请在异步上下文中执行操作")
         await self.db_session.rollback()
 
+    @classmethod
+    def _current_task_is_cancelling(cls) -> bool:
+        task = asyncio.current_task()
+        return bool(task and task.cancelling())
+
+    async def _close_session(self, db_session: AsyncSession) -> None:
+        try:
+            await db_session.close()
+        finally:
+            if self.db_session is db_session:
+                self.db_session = None
+
+    @classmethod
+    async def _rollback_and_close_detached(cls, db_session: AsyncSession) -> None:
+        try:
+            try:
+                await db_session.rollback()
+            except asyncio.CancelledError:
+                logger.warning("后台UoW回滚操作被取消")
+            except Exception as e:
+                logger.warning(f"后台UoW回滚操作失败: {e}")
+        finally:
+            try:
+                await db_session.close()
+            except asyncio.CancelledError:
+                logger.warning("后台UoW关闭会话操作被取消")
+            except Exception as e:
+                logger.warning(f"后台UoW关闭会话操作失败: {e}")
+
+    def _schedule_rollback_and_close(self, db_session: AsyncSession) -> None:
+        cleanup = self._rollback_and_close_detached(db_session)
+        try:
+            asyncio.create_task(cleanup)
+        except RuntimeError:
+            cleanup.close()
+            logger.warning("无法创建后台UoW清理任务，事件循环可能已关闭")
+        finally:
+            if self.db_session is db_session:
+                self.db_session = None
+
     async def __aenter__(self) -> Self:
         """进入UoW操作上下文管理器的逻辑"""
         # 为每个上下文开启一个新的会话
@@ -77,21 +119,32 @@ class DBUnitOfWork(IUnitOfWork):
         包括此处的commit/rollback/close。如果不妥善处理CancelledError，
         会导致连接池中的连接处于异常状态，影响后续使用该池的其他任务。
         """
+        db_session: AsyncSession = cast(AsyncSession, self.db_session)
+
+        if (
+            exc_type
+            and issubclass(exc_type, asyncio.CancelledError)
+            and self._current_task_is_cancelling()
+        ):
+            logger.warning("UoW上下文被取消，后台回滚并关闭会话")
+            self._schedule_rollback_and_close(db_session)
+            return None
+
         try:
             if exc_type:
                 await self.rollback()
             else:
                 await self.commit()
         except asyncio.CancelledError:
-            # SSE断连等场景下cancel scope取消了commit/rollback操作，
-            # 记录警告但不让异常传播，避免后续close操作也被跳过
             logger.warning("UoW提交/回滚操作被取消(可能是客户端断开连接)")
+            if self._current_task_is_cancelling():
+                self._schedule_rollback_and_close(db_session)
+            else:
+                await self._close_session(db_session)
+            raise
         except Exception as e:
             logger.warning(f"UoW提交/回滚操作失败: {e}")
             raise
         finally:
-            db_session: AsyncSession = cast(AsyncSession, self.db_session)
-            try:
-                await db_session.close()
-            finally:
-                self.db_session = None
+            if self.db_session is db_session:
+                await self._close_session(db_session)

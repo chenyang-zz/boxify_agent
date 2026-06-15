@@ -33,7 +33,7 @@ from app.domain.external.embedding import EmbeddingModel
 from app.domain.external.knowledge_search import KnowledgeSearch
 from app.domain.models.user import User
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
-from app.domain.services.memory import LongTermMemoryManager
+from app.domain.services.memory import LongTermMemoryManager, MemoryActiveRecall
 from app.infrastructure.external.file_storage.cos_file_storage import CosFileStorage
 from app.infrastructure.external.health_checker.elasticsearch_health_checker import (
     ElasticsearchHealthChecker,
@@ -268,6 +268,15 @@ async def get_agent_service(
 
     # 实例化Agent服务并返回
     memory_graph = await _build_optional_memory_graph(current_user.id)
+    active_recall = (
+        MemoryActiveRecall(
+            user_id=current_user.id,
+            graph_repository=memory_graph[0],
+            embedding=memory_graph[1],
+        )
+        if memory_graph[0] and memory_graph[1]
+        else None
+    )
     return AgentService(
         uow_factory=get_uow,
         llm=llm,
@@ -285,6 +294,7 @@ async def get_agent_service(
             graph_repository=memory_graph[0],
             embedding=memory_graph[1],
         ),
+        active_recall=active_recall,
     )
 
 

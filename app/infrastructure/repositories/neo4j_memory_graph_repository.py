@@ -4,9 +4,11 @@ from typing import Any
 from app.domain.models.memory_graph import (
     EntityNode,
     GraphRelationFact,
+    InsightResult,
     MemoryGraph,
     MemoryPromotionStats,
     MemoryGraphResult,
+    stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 
@@ -46,8 +48,16 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 "FOR (e:Entity) REQUIRE (e.id, e.user_id) IS UNIQUE"
             ),
             (
+                "CREATE CONSTRAINT memory_insight_id IF NOT EXISTS "
+                "FOR (i:Insight) REQUIRE (i.id, i.user_id) IS UNIQUE"
+            ),
+            (
                 "CREATE INDEX memory_entity_name IF NOT EXISTS "
                 "FOR (e:Entity) ON (e.user_id, e.name, e.type)"
+            ),
+            (
+                "CREATE INDEX memory_insight_theme IF NOT EXISTS "
+                "FOR (i:Insight) ON (i.user_id, i.theme)"
             ),
             (
                 "CREATE INDEX memory_entity_layer IF NOT EXISTS "
@@ -58,8 +68,18 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 "FOR (e:Entity) ON EACH [e.name, e.description]"
             ),
             (
+                "CREATE FULLTEXT INDEX memory_insight_fulltext IF NOT EXISTS "
+                "FOR (i:Insight) ON EACH [i.theme, i.content]"
+            ),
+            (
                 "CREATE VECTOR INDEX memory_entity_embedding IF NOT EXISTS "
                 "FOR (e:Entity) ON (e.embedding) OPTIONS {indexConfig: "
+                f"{{`vector.dimensions`: {self._embedding_dims}, "
+                "`vector.similarity_function`: 'cosine'}}}"
+            ),
+            (
+                "CREATE VECTOR INDEX memory_insight_embedding IF NOT EXISTS "
+                "FOR (i:Insight) ON (i.embedding) OPTIONS {indexConfig: "
                 f"{{`vector.dimensions`: {self._embedding_dims}, "
                 "`vector.similarity_function`: 'cosine'}}}"
             ),
@@ -243,6 +263,159 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 core_facts=core_facts,
                 traits=traits,
             )
+
+    async def reflection_top_entities(
+        self, user_id: str, top_k: int
+    ) -> list[EntityNode]:
+        """读取反思使用的长期实体。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id, memory_layer: 'long_term'})
+        RETURN entity.id AS id,
+               entity.name AS name,
+               entity.type AS type,
+               entity.description AS description,
+               coalesce(entity.importance, 0.5) AS importance,
+               coalesce(entity.confidence, 0.8) AS confidence,
+               coalesce(entity.mention_count, 1) AS mention_count,
+               coalesce(entity.access_count, 0) AS access_count,
+               entity.last_access_at AS last_access_at,
+               coalesce(entity.memory_layer, 'short_term') AS memory_layer,
+               coalesce(entity.core_facts, []) AS core_facts,
+               coalesce(entity.traits, []) AS traits
+        ORDER BY coalesce(entity.access_count, 0) DESC,
+                 coalesce(entity.mention_count, 0) DESC,
+                 coalesce(entity.importance, 0.5) DESC
+        LIMIT $top_k
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id, top_k=top_k)
+            rows = await result.data()
+        return [self._row_to_entity_node(row, user_id) for row in rows]
+
+    async def reflection_entity_statements(
+        self, user_id: str, entity_id: str, limit: int
+    ) -> list[str]:
+        """读取反思使用的实体代表性陈述。"""
+        cypher = """
+        MATCH (entity:Entity {id: $entity_id, user_id: $user_id})
+        MATCH (entity)<-[:MENTIONS]-(statement:Statement {user_id: $user_id})
+        RETURN DISTINCT statement.text AS text
+        ORDER BY coalesce(statement.importance, 0.5) DESC
+        LIMIT $limit
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher, user_id=user_id, entity_id=entity_id, limit=limit
+            )
+            rows = await result.data()
+        return [str(row.get("text") or "").strip() for row in rows if row.get("text")]
+
+    async def upsert_insight(
+        self,
+        user_id: str,
+        theme: str,
+        content: str,
+        embedding: list[float] | None,
+        importance: float,
+        confidence: float,
+        source_count: int,
+        entity_ids: list[str],
+    ) -> str:
+        """按主题 upsert 洞察并重建 DERIVED_FROM 溯源边。"""
+        insight_id = stable_memory_graph_id(user_id, "insight", theme.strip().lower())
+        cypher = """
+        MERGE (insight:Insight {user_id: $user_id, theme: $theme})
+        ON CREATE SET insight.id = $insight_id,
+                      insight.created_at = datetime()
+        SET insight.content = $content,
+            insight.embedding = $embedding,
+            insight.importance = $importance,
+            insight.confidence = $confidence,
+            insight.source_count = $source_count,
+            insight.updated_at = datetime()
+        WITH insight
+        OPTIONAL MATCH (insight)-[derived:DERIVED_FROM]->()
+        DELETE derived
+        WITH insight
+        UNWIND $entity_ids AS entity_id
+        MATCH (entity:Entity {id: entity_id, user_id: $user_id})
+        MERGE (insight)-[:DERIVED_FROM {user_id: $user_id}]->(entity)
+        RETURN insight.id AS id
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                theme=theme,
+                insight_id=insight_id,
+                content=content,
+                embedding=embedding or [],
+                importance=importance,
+                confidence=confidence,
+                source_count=source_count,
+                entity_ids=entity_ids,
+            )
+            rows = await result.data()
+        return str((rows[0] if rows else {}).get("id") or insight_id)
+
+    async def search_insights_by_vector(
+        self, user_id: str, query_embedding: list[float], top_k: int
+    ) -> list[InsightResult]:
+        """按当前用户精确计算向量相似度召回洞察。"""
+        cypher = """
+        MATCH (insight:Insight {user_id: $user_id})
+        WHERE insight.embedding IS NOT NULL
+          AND size(insight.embedding) = size($query_embedding)
+        WITH insight,
+             vector.similarity.cosine(insight.embedding, $query_embedding) AS score
+        RETURN insight.id AS id,
+               insight.theme AS theme,
+               insight.content AS content,
+               coalesce(insight.importance, 0.6) AS importance,
+               coalesce(insight.confidence, 0.7) AS confidence,
+               coalesce(insight.source_count, 0) AS source_count,
+               score
+        ORDER BY score DESC
+        LIMIT $top_k
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                query_embedding=query_embedding,
+                top_k=top_k,
+            )
+            rows = await result.data()
+        return [self._row_to_insight_result(row) for row in rows]
+
+    async def list_insights(self, user_id: str) -> list[InsightResult]:
+        """列出用户洞察。"""
+        cypher = """
+        MATCH (insight:Insight {user_id: $user_id})
+        RETURN insight.id AS id,
+               insight.theme AS theme,
+               insight.content AS content,
+               coalesce(insight.importance, 0.6) AS importance,
+               coalesce(insight.confidence, 0.7) AS confidence,
+               coalesce(insight.source_count, 0) AS source_count,
+               0.0 AS score
+        ORDER BY coalesce(insight.updated_at, insight.created_at) DESC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return [self._row_to_insight_result(row) for row in rows]
+
+    async def count_insights(self, user_id: str) -> int:
+        """统计用户洞察数量。"""
+        cypher = """
+        MATCH (insight:Insight {user_id: $user_id})
+        RETURN count(insight) AS count
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return int((rows[0] if rows else {}).get("count") or 0)
 
     async def _search_fulltext(
         self, user_id: str, query: str, top_k: int
@@ -517,4 +690,17 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             memory_layer=str(row.get("memory_layer") or "short_term"),
             core_facts=row.get("core_facts") or [],
             traits=row.get("traits") or [],
+        )
+
+    @staticmethod
+    def _row_to_insight_result(row: dict[str, Any]) -> InsightResult:
+        """把 Neo4j 洞察行转换为领域结果。"""
+        return InsightResult(
+            id=str(row.get("id") or ""),
+            theme=str(row.get("theme") or ""),
+            content=str(row.get("content") or ""),
+            importance=float(row.get("importance") or 0.6),
+            confidence=float(row.get("confidence") or 0.7),
+            source_count=int(row.get("source_count") or 0),
+            score=float(row.get("score") or 0),
         )

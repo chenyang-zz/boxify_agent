@@ -1,10 +1,10 @@
 import asyncio
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
 from app.bootstrap.memory import build_memory_consolidation_service_for_user
 from app.celery_app import celery_app
 from app.domain.models.memory_graph import MemoryConsolidationStats
-from app.domain.services.memory.consolidation import MemoryConsolidator
+from app.domain.services.memory.consolidator import MemoryConsolidator
 
 
 async def run_consolidate_memory(

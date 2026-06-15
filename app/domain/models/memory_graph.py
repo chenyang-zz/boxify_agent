@@ -137,6 +137,41 @@ class MemoryConsolidationStats(BaseModel):
     enhanced_profiles: int = 0
 
 
+class MemoryReflectStats(BaseModel):
+    """一次长期记忆反思任务的统计。"""
+
+    insights: int = 0
+    skipped: str | None = None
+    error: str | None = None
+
+
+class InsightNode(BaseModel):
+    """反思产生的高层洞察节点。"""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str
+    theme: str
+    content: str
+    embedding: list[float] = Field(default_factory=list)
+    importance: float = 0.6
+    confidence: float = 0.7
+    source_count: int = 0
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime | None = None
+
+
+class InsightResult(BaseModel):
+    """主动召回返回的洞察命中。"""
+
+    id: str
+    theme: str
+    content: str
+    importance: float = 0.6
+    confidence: float = 0.7
+    source_count: int = 0
+    score: float = 0
+
+
 class GraphRelationFact(BaseModel):
     """检索返回的一跳关系事实。"""
 
