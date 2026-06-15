@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.application.services.agent_service import AgentService
@@ -52,6 +54,51 @@ async def test_db_uow_reraises_commit_failure_and_closes_session():
             pass
 
     assert db_session.commits == 1
+    assert db_session.closes == 1
+    assert uow.db_session is None
+
+
+@pytest.mark.anyio
+async def test_db_uow_rolls_back_and_reraises_cancelled_body():
+    db_session = FakeDBSession()
+    uow = DBUnitOfWork(session_factory=lambda: db_session)
+
+    with pytest.raises(asyncio.CancelledError):
+        async with uow:
+            raise asyncio.CancelledError()
+
+    assert db_session.commits == 0
+    assert db_session.rollbacks == 1
+    assert db_session.closes == 1
+    assert uow.db_session is None
+
+
+@pytest.mark.anyio
+async def test_db_uow_reraises_cancelled_commit_and_closes_session():
+    db_session = FakeDBSession(commit_error=asyncio.CancelledError())
+    uow = DBUnitOfWork(session_factory=lambda: db_session)
+
+    with pytest.raises(asyncio.CancelledError):
+        async with uow:
+            pass
+
+    assert db_session.commits == 1
+    assert db_session.rollbacks == 0
+    assert db_session.closes == 1
+    assert uow.db_session is None
+
+
+@pytest.mark.anyio
+async def test_db_uow_reraises_cancelled_rollback_and_closes_session():
+    db_session = FakeDBSession(rollback_error=asyncio.CancelledError())
+    uow = DBUnitOfWork(session_factory=lambda: db_session)
+
+    with pytest.raises(asyncio.CancelledError):
+        async with uow:
+            raise RuntimeError("boom")
+
+    assert db_session.commits == 0
+    assert db_session.rollbacks == 1
     assert db_session.closes == 1
     assert uow.db_session is None
 
