@@ -1,0 +1,97 @@
+app/domain/repositories/memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_7c43eed17f0cbc 3-8,45,51
+  s_b85c67e2355151::t_16f94bbbf13f88 33-44,46-50,52-67
+tests/test_memory_api.py
+  s_44b7f7a2f18bd5::t_7e20159dd115d9 5,155-159
+  s_b85c67e2355151::t_b0773996cf4fb4 67-102,151-154
+app/interfaces/endpoints/memory_routes.py
+  s_b85c67e2355151::t_e408dff01bc094 8,73-85
+  s_44b7f7a2f18bd5::t_416e5149d1d05f 86
+tests/test_memory_consolidate_task.py
+  s_44b7f7a2f18bd5::t_7e20159dd115d9 3,14-18,31-35
+  s_b85c67e2355151::t_ad157c5e903344 1-2,4-13,19-30
+tests/test_memory_service.py
+  s_44b7f7a2f18bd5::t_ac2c0190ef0628 14,181-183,223,232-293,295-296,298,501-522
+  s_b85c67e2355151::t_507f89121b37fe 176-177,179-180,184-188,194-215,218-219,221-222,224-227,229-231,294,297,467-472,474-487,489-500,523-551
+  s_44b7f7a2f18bd5::t_7e20159dd115d9 7,9,11,13,178,189-193,216-217,220,228,473,488
+core/config.py
+  s_b85c67e2355151::t_3d680dd264021d 50-54
+app/domain/models/memory_graph.py
+  s_b85c67e2355151::t_fc46e523183860 44-46,60-65,80-82,158-163,177-182,196-201
+  s_44b7f7a2f18bd5::t_7c43eed17f0cbc 125-139
+app/infrastructure/external/task_dispatcher/celery_task_dispatcher.py
+  s_b85c67e2355151::t_4eca6d33f862e9 18-23
+app/tasks/memory/consolidate.py
+  s_b85c67e2355151::t_f97c70593ec0e1 1-5,8-12,14,16-20,22-27
+  s_44b7f7a2f18bd5::t_416e5149d1d05f 6-7,13,15,21,28
+app/bootstrap/memory.py
+  s_44b7f7a2f18bd5::t_3358915d6d171f 10,67-70
+  s_44b7f7a2f18bd5::t_416e5149d1d05f 8,60,64
+  s_b85c67e2355151::t_8177dd68d2b5c4 58-59,61-63,65-66,71
+app/domain/services/memory/profile_summarizer.py
+  s_44b7f7a2f18bd5::t_70c6311d2255b8 1-72
+app/domain/services/prompts/memory.py
+  s_44b7f7a2f18bd5::t_b6a2b489e3235c 41
+  s_44b7f7a2f18bd5::t_70c6311d2255b8 35-40,42-48
+app/domain/services/memory/graph_extractor.py
+  s_b85c67e2355151::t_5bb1d8061cb819 206-213
+app/domain/external/task_dispatcher.py
+  s_b85c67e2355151::t_79b8534515e1c8 14-17
+app/domain/services/memory/consolidation.py
+  s_44b7f7a2f18bd5::t_7c43eed17f0cbc 4-6,14-15,28,44-48,59,69
+  s_44b7f7a2f18bd5::t_70c6311d2255b8 8,21,25,42,63-65
+  s_b85c67e2355151::t_9abf81d05e6e83 1-3,7,9-13,16-20,22-24,26-27,29-41,43,49-58,60-62,66-68,70-74
+app/infrastructure/repositories/neo4j_memory_graph_repository.py
+  s_b85c67e2355151::t_061933033f84e9 1,15-18,52-55,87-95,124-153,155-163,165-170,172-173,175-186,191-193,195-207,210-245,319-324,356,358-359,398-409,417-442,456-465,491-496,512-519
+  s_44b7f7a2f18bd5::t_7c43eed17f0cbc 8,154,187-190,194,208-209
+  h_e1f1392360ad67 164,171,174
+app/interfaces/service_dependencies.py
+  s_b85c67e2355151::t_c5415e190126bb 229-231,238-239,299-309
+tests/test_memory_tool.py
+  s_b85c67e2355151::t_29056620e2b2ba 22-27,59-64
+app/interfaces/schemas/memory.py
+  s_b85c67e2355151::t_9e311e8b5653e6 25-32
+app/celery_app.py
+  s_b85c67e2355151::t_d3b504a3d47a88 12-16
+app/domain/services/memory/__init__.py
+  s_44b7f7a2f18bd5::t_7c43eed17f0cbc 1
+  s_44b7f7a2f18bd5::t_70c6311d2255b8 6,8-13
+app/application/services/memory_service.py
+  s_44b7f7a2f18bd5::t_416e5149d1d05f 9,85,89
+  s_44b7f7a2f18bd5::t_3358915d6d171f 12-16,34-38,92
+  s_b85c67e2355151::t_ef018d98f8ac16 5-6,29-30,32-33,84,86-88,90-91,93-94
+tests/test_memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_7e20159dd115d9 8,280-283
+  s_b85c67e2355151::t_9b12e3867486a1 83-116,219-278,284-293,379-403
+  s_b85c67e2355151::t_c98046cfd83344 211
+  s_b85c67e2355151::t_46fbe67bc903ea 212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "55b1c328b44c8b68e07e85347909b81b8e31a585",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    },
+    "s_b85c67e2355151": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0c4-9dd1-7b42-b028-e30d00a7b87d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
