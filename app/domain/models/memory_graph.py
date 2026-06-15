@@ -41,6 +41,9 @@ class StatementNode(BaseModel):
     temporal_type: str = "STATIC"
     importance: float = 0.5
     confidence: float = 0.8
+    access_count: int = 0
+    last_access_at: datetime | None = None
+    memory_layer: str = "short_term"
 
 
 class EntityNode(BaseModel):
@@ -54,6 +57,12 @@ class EntityNode(BaseModel):
     embedding: list[float] = Field(default_factory=list)
     importance: float = 0.5
     confidence: float = 0.8
+    mention_count: int = 1
+    access_count: int = 0
+    last_access_at: datetime | None = None
+    memory_layer: str = "short_term"
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
 
 
 class RelationEdge(BaseModel):
@@ -68,6 +77,9 @@ class RelationEdge(BaseModel):
     evidence: str
     importance: float = 0.5
     confidence: float = 0.8
+    access_count: int = 0
+    last_access_at: datetime | None = None
+    memory_layer: str = "short_term"
 
 
 class MentionEdge(BaseModel):
@@ -110,6 +122,21 @@ class MemoryGraphStats(BaseModel):
     relations: int = 0
 
 
+class MemoryPromotionStats(BaseModel):
+    """短期图谱记忆提升为长期记忆后的统计。"""
+
+    promoted_entities: int = 0
+    promoted_statements: int = 0
+
+
+class MemoryConsolidationStats(BaseModel):
+    """一次长期记忆巩固任务的完整统计。"""
+
+    promoted_entities: int = 0
+    promoted_statements: int = 0
+    enhanced_profiles: int = 0
+
+
 class GraphRelationFact(BaseModel):
     """检索返回的一跳关系事实。"""
 
@@ -128,6 +155,12 @@ class MemoryGraphResult(BaseModel):
     entity_type: str
     description: str = ""
     score: float = 0
+    importance: float = 0.5
+    memory_layer: str = "short_term"
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
+    access_count: int = 0
+    mention_count: int = 0
     source_memory_id: str | None = None
     source_memory_summary: str | None = None
     relations: list[GraphRelationFact] = Field(default_factory=list)
@@ -141,6 +174,12 @@ class LongTermMemoryGraphData(BaseModel):
     entity_type: str
     description: str = ""
     score: float = 0
+    importance: float = 0.5
+    memory_layer: str = "short_term"
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
+    access_count: int = 0
+    mention_count: int = 0
     source_memory_id: str | None = None
     source_memory_summary: str | None = None
     relations: list[GraphRelationFact] = Field(default_factory=list)
@@ -154,6 +193,12 @@ class LongTermMemoryGraphData(BaseModel):
             entity_type=result.entity_type,
             description=result.description,
             score=result.score,
+            importance=result.importance,
+            memory_layer=result.memory_layer,
+            core_facts=result.core_facts,
+            traits=result.traits,
+            access_count=result.access_count,
+            mention_count=result.mention_count,
             source_memory_id=result.source_memory_id,
             source_memory_summary=result.source_memory_summary,
             relations=result.relations,

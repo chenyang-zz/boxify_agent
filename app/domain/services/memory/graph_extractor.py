@@ -203,6 +203,14 @@ class MemoryGraphExtractor:
             if not existing:
                 continue
             entity.id = existing.id
+            entity.mention_count = existing.mention_count + 1
+            entity.access_count = existing.access_count
+            entity.last_access_at = existing.last_access_at
+            entity.memory_layer = existing.memory_layer
+            entity.core_facts = existing.core_facts
+            entity.traits = existing.traits
+            entity.importance = max(entity.importance, existing.importance)
+            entity.confidence = max(entity.confidence, existing.confidence)
             old_description = existing.description
             if len(old_description) > len(entity.description):
                 entity.description = old_description

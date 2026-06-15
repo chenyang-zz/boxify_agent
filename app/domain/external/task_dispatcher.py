@@ -11,3 +11,7 @@ class TaskDispatcher(Protocol):
     async def dispatch_extract_memory(self, memory_id: str) -> None:
         """派发长期记忆图谱萃取任务。"""
         ...
+
+    async def dispatch_consolidate_memory(self, user_id: str) -> None:
+        """派发当前用户长期记忆巩固任务。"""
+        ...

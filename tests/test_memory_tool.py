@@ -19,6 +19,12 @@ async def test_memory_tool_searches_user_long_term_memories():
                     entity_name="周杰伦",
                     entity_type="Person",
                     description="歌手",
+                    importance=0.9,
+                    memory_layer="long_term",
+                    core_facts=["用户长期喜欢周杰伦"],
+                    traits=["偏好华语流行"],
+                    access_count=3,
+                    mention_count=4,
                     relations=[
                         GraphRelationFact(
                             name="LIKES",
@@ -50,6 +56,12 @@ async def test_memory_tool_searches_user_long_term_memories():
                 "entity_type": "Person",
                 "description": "歌手",
                 "score": 0,
+                "importance": 0.9,
+                "memory_layer": "long_term",
+                "core_facts": ["用户长期喜欢周杰伦"],
+                "traits": ["偏好华语流行"],
+                "access_count": 3,
+                "mention_count": 4,
                 "relations": [
                     {
                         "name": "LIKES",

@@ -226,12 +226,17 @@ async def get_memory_service(
 ) -> MemoryService:
     """获取长期记忆服务"""
     memory_graph = await _build_optional_memory_graph(current_user.id)
+    profile_dependencies = await _build_optional_memory_profile_dependencies(
+        current_user.id
+    )
     return MemoryService(
         uow_factory=get_uow,
         user_id=current_user.id,
         task_dispatcher=build_memory_task_dispatcher(),
         graph_repository=memory_graph[0],
         embedding=memory_graph[1],
+        llm=profile_dependencies[0],
+        json_parser=profile_dependencies[1],
     )
 
 
@@ -290,4 +295,16 @@ async def _build_optional_memory_graph(
         return build_memory_graph_repository(), await build_embedding_model(user_id)
     except Exception as e:
         logger.warning("记忆图谱检索初始化失败，将使用 PG 记忆兜底: %s", e)
+        return None, None
+
+
+async def _build_optional_memory_profile_dependencies(user_id: str):
+    """为手动巩固组装画像增强依赖，失败时只跳过画像增强。"""
+    try:
+        app_config = await AppConfigService(
+            uow_factory=get_uow, user_id=user_id
+        ).get_app_config()
+        return OpenAILLM(app_config.llm_config), RepairJSONParser()
+    except Exception as e:
+        logger.warning("记忆画像增强依赖初始化失败，将只执行分层巩固: %s", e)
         return None, None

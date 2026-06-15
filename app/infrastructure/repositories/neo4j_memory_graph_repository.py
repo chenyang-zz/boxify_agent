@@ -1,15 +1,21 @@
+import logging
 from typing import Any
 
 from app.domain.models.memory_graph import (
     EntityNode,
     GraphRelationFact,
     MemoryGraph,
+    MemoryPromotionStats,
     MemoryGraphResult,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 
 _VECTOR_WEIGHT = 0.55
 _FULLTEXT_WEIGHT = 0.30
+_IMPORTANCE_WEIGHT = 0.15
+_LONG_TERM_BONUS = 0.05
+
+logger = logging.getLogger(__name__)
 
 
 class Neo4jMemoryGraphRepository(MemoryGraphRepository):
@@ -44,6 +50,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 "FOR (e:Entity) ON (e.user_id, e.name, e.type)"
             ),
             (
+                "CREATE INDEX memory_entity_layer IF NOT EXISTS "
+                "FOR (e:Entity) ON (e.user_id, e.memory_layer)"
+            ),
+            (
                 "CREATE FULLTEXT INDEX memory_entity_fulltext IF NOT EXISTS "
                 "FOR (e:Entity) ON EACH [e.name, e.description]"
             ),
@@ -74,7 +84,15 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         RETURN entity.id AS id,
                entity.name AS name,
                entity.type AS type,
-               entity.description AS description
+               entity.description AS description,
+               coalesce(entity.importance, 0.5) AS importance,
+               coalesce(entity.confidence, 0.8) AS confidence,
+               coalesce(entity.mention_count, 1) AS mention_count,
+               coalesce(entity.access_count, 0) AS access_count,
+               entity.last_access_at AS last_access_at,
+               coalesce(entity.memory_layer, 'short_term') AS memory_layer,
+               coalesce(entity.core_facts, []) AS core_facts,
+               coalesce(entity.traits, []) AS traits
         """
         async with self._driver.session(database=self._database) as session:
             result = await session.run(
@@ -103,7 +121,128 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 query_embedding=query_embedding,
                 top_k=top_k,
             )
-        return self._fuse_rows(fulltext_rows, vector_rows, top_k)
+        results = self._fuse_rows(fulltext_rows, vector_rows, top_k)
+        if results:
+            try:
+                await self.bump_entity_access(
+                    user_id, [result.entity_id for result in results]
+                )
+            except Exception as e:
+                logger.warning("记忆图谱命中回写失败，忽略: %s", e)
+        return results
+
+    async def bump_entity_access(self, user_id: str, entity_ids: list[str]) -> None:
+        """记录实体检索命中次数和最后访问时间。"""
+        if not entity_ids:
+            return
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        WHERE entity.id IN $entity_ids
+        SET entity.access_count = coalesce(entity.access_count, 0) + 1,
+            entity.last_access_at = datetime()
+        """
+        async with self._driver.session(database=self._database) as session:
+            await session.run(cypher, user_id=user_id, entity_ids=entity_ids)
+
+    async def promote_short_to_long(
+        self,
+        user_id: str,
+        min_access: int,
+        min_importance: float,
+        min_mention: int,
+        age_before: str,
+    ) -> MemoryPromotionStats:
+        """按访问、重要度、提及次数和年龄阈值把短期记忆提升为长期。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        WHERE coalesce(entity.memory_layer, 'short_term') = 'short_term'
+          AND (
+            coalesce(entity.access_count, 0) >= $min_access
+            OR coalesce(entity.importance, 0.5) >= $min_importance
+            OR (
+              coalesce(entity.mention_count, 1) >= $min_mention
+              AND date(entity.created_at) <= date($age_before)
+            )
+          )
+        SET entity.memory_layer = 'long_term'
+        WITH DISTINCT entity
+        OPTIONAL MATCH (entity)<-[:MENTIONS]-(statement:Statement {user_id: $user_id})
+        SET statement.memory_layer = 'long_term'
+        WITH collect(DISTINCT entity) AS promoted_entities,
+             collect(DISTINCT statement) AS promoted_statements
+        RETURN size(promoted_entities) AS entities,
+               size([s IN promoted_statements WHERE s IS NOT NULL]) AS statements
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                min_access=min_access,
+                min_importance=min_importance,
+                min_mention=min_mention,
+                age_before=age_before,
+            )
+            rows = await result.data()
+        row = rows[0] if rows else {}
+        return MemoryPromotionStats(
+            promoted_entities=int(row.get("entities") or 0),
+            promoted_statements=int(row.get("statements") or 0),
+        )
+
+    async def top_long_term_entities(
+        self, user_id: str, top_k: int
+    ) -> list[EntityNode]:
+        """读取高价值长期实体用于画像增强。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id, memory_layer: 'long_term'})
+        RETURN entity.id AS id,
+               entity.name AS name,
+               entity.type AS type
+        ORDER BY coalesce(entity.access_count, 0) DESC,
+                 coalesce(entity.mention_count, 0) DESC,
+                 coalesce(entity.importance, 0.5) DESC
+        LIMIT $top_k
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id, top_k=top_k)
+            rows = await result.data()
+        return [self._row_to_entity_node(row, user_id) for row in rows]
+
+    async def entity_statements(self, user_id: str, entity_id: str) -> list[str]:
+        """读取实体关联陈述供画像增强。"""
+        cypher = """
+        MATCH (entity:Entity {id: $entity_id, user_id: $user_id})
+        MATCH (entity)<-[:MENTIONS]-(statement:Statement {user_id: $user_id})
+        RETURN DISTINCT statement.text AS text
+        ORDER BY coalesce(statement.importance, 0.5) DESC
+        LIMIT 50
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id, entity_id=entity_id)
+            rows = await result.data()
+        return [str(row.get("text") or "").strip() for row in rows if row.get("text")]
+
+    async def write_entity_profile(
+        self,
+        user_id: str,
+        entity_id: str,
+        core_facts: list[str],
+        traits: list[str],
+    ) -> None:
+        """回写长期实体画像。"""
+        cypher = """
+        MATCH (entity:Entity {id: $entity_id, user_id: $user_id})
+        SET entity.core_facts = $core_facts,
+            entity.traits = $traits
+        """
+        async with self._driver.session(database=self._database) as session:
+            await session.run(
+                cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+                core_facts=core_facts,
+                traits=traits,
+            )
 
     async def _search_fulltext(
         self, user_id: str, query: str, top_k: int
@@ -177,6 +316,12 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             name: node.name,
             type: node.type,
             description: node.description,
+            importance: coalesce(node.importance, 0.5),
+            memory_layer: coalesce(node.memory_layer, 'short_term'),
+            core_facts: coalesce(node.core_facts, []),
+            traits: coalesce(node.traits, []),
+            access_count: coalesce(node.access_count, 0),
+            mention_count: coalesce(node.mention_count, 0),
             memory_id: dialogue.memory_id,
             memory_summary: coalesce(dialogue.summary, '')
         } AS entity,
@@ -208,7 +353,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             result.score = (
                 _VECTOR_WEIGHT * vector_norm.get(entity_id, 0)
                 + _FULLTEXT_WEIGHT * fulltext_norm.get(entity_id, 0)
+                + _IMPORTANCE_WEIGHT * result.importance
             )
+            if result.memory_layer == "long_term":
+                result.score += _LONG_TERM_BONUS
         return sorted(
             by_entity.values(),
             key=lambda item: item.score,
@@ -247,7 +395,18 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             MATCH (chunk:Chunk {id: row.chunk_id, user_id: row.user_id})
             MERGE (statement:Statement {id: row.id, user_id: row.user_id})
             SET statement.index = row.index,
-                statement.text = row.text
+                statement.text = row.text,
+                statement.statement_type = row.statement_type,
+                statement.temporal_type = row.temporal_type,
+                statement.importance = row.importance,
+                statement.confidence = row.confidence,
+                statement.access_count = coalesce(statement.access_count, row.access_count),
+                statement.last_access_at = coalesce(statement.last_access_at, row.last_access_at),
+                statement.memory_layer = CASE
+                    WHEN coalesce(statement.memory_layer, row.memory_layer) = 'long_term'
+                    THEN 'long_term'
+                    ELSE row.memory_layer
+                END
             MERGE (chunk)-[:HAS_STATEMENT]->(statement)
             WITH d
             UNWIND $entities AS row
@@ -255,7 +414,32 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             SET entity.name = row.name,
                 entity.type = row.type,
                 entity.description = row.description,
-                entity.embedding = row.embedding
+                entity.embedding = row.embedding,
+                entity.importance = CASE
+                    WHEN coalesce(entity.importance, 0.0) > row.importance
+                    THEN entity.importance
+                    ELSE row.importance
+                END,
+                entity.confidence = CASE
+                    WHEN coalesce(entity.confidence, 0.0) > row.confidence
+                    THEN entity.confidence
+                    ELSE row.confidence
+                END,
+                entity.mention_count = CASE
+                    WHEN coalesce(entity.mention_count, 0) > row.mention_count
+                    THEN entity.mention_count
+                    ELSE row.mention_count
+                END,
+                entity.access_count = coalesce(entity.access_count, row.access_count),
+                entity.last_access_at = coalesce(entity.last_access_at, row.last_access_at),
+                entity.memory_layer = CASE
+                    WHEN coalesce(entity.memory_layer, row.memory_layer) = 'long_term'
+                    THEN 'long_term'
+                    ELSE row.memory_layer
+                END,
+                entity.core_facts = coalesce(entity.core_facts, row.core_facts),
+                entity.traits = coalesce(entity.traits, row.traits),
+                entity.created_at = coalesce(entity.created_at, datetime())
             WITH d
             UNWIND $mentions AS row
             MATCH (statement:Statement {id: row.statement_id, user_id: row.user_id})
@@ -269,7 +453,16 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             MERGE (source)-[rel:RELATION {id: row.id, user_id: row.user_id}]->(target)
             SET rel.name = row.name,
                 rel.evidence = row.evidence,
-                rel.statement_id = statement.id
+                rel.statement_id = statement.id,
+                rel.importance = row.importance,
+                rel.confidence = row.confidence,
+                rel.access_count = coalesce(rel.access_count, row.access_count),
+                rel.last_access_at = coalesce(rel.last_access_at, row.last_access_at),
+                rel.memory_layer = CASE
+                    WHEN coalesce(rel.memory_layer, row.memory_layer) = 'long_term'
+                    THEN 'long_term'
+                    ELSE row.memory_layer
+                END
             """,
             dialogue_id=params["dialogue"]["id"],
             user_id=params["user_id"],
@@ -295,6 +488,12 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             entity_name=entity.get("name", ""),
             entity_type=entity.get("type", ""),
             description=entity.get("description") or "",
+            importance=float(entity.get("importance") or 0.5),
+            memory_layer=entity.get("memory_layer") or "short_term",
+            core_facts=entity.get("core_facts") or [],
+            traits=entity.get("traits") or [],
+            access_count=int(entity.get("access_count") or 0),
+            mention_count=int(entity.get("mention_count") or 0),
             source_memory_id=entity.get("memory_id"),
             source_memory_summary=entity.get("memory_summary") or None,
             relations=relations,
@@ -310,4 +509,12 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             name=str(row.get("name") or ""),
             type=str(row.get("type") or ""),
             description=str(row.get("description") or ""),
+            importance=float(row.get("importance") or 0.5),
+            confidence=float(row.get("confidence") or 0.8),
+            mention_count=int(row.get("mention_count") or 1),
+            access_count=int(row.get("access_count") or 0),
+            last_access_at=row.get("last_access_at"),
+            memory_layer=str(row.get("memory_layer") or "short_term"),
+            core_facts=row.get("core_facts") or [],
+            traits=row.get("traits") or [],
         )

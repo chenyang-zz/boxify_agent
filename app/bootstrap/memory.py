@@ -5,7 +5,9 @@ from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.app_config import AppConfig
 from app.domain.services.memory.fact_extractor import MemoryFactExtractor
+from app.domain.services.memory.consolidation import MemoryConsolidator
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
+from app.domain.services.memory.profile_summarizer import MemoryProfileSummarizer
 from app.infrastructure.external.json_parser.repair_json_parser import RepairJSONParser
 from app.infrastructure.external.llm.openai_llm import OpenAILLM
 from app.infrastructure.repositories.neo4j_memory_graph_repository import (
@@ -51,6 +53,22 @@ async def build_memory_graph_extractor_for_user(user_id: str) -> MemoryGraphExtr
     app_config = await _load_user_app_config(user_id)
     llm = OpenAILLM(app_config.llm_config)
     return await build_memory_graph_extractor(user_id=user_id, llm=llm)
+
+
+async def build_memory_consolidation_service_for_user(
+    user_id: str,
+) -> MemoryConsolidator:
+    """按用户应用配置组装记忆巩固服务。"""
+    app_config = await _load_user_app_config(user_id)
+    llm = OpenAILLM(app_config.llm_config)
+    return MemoryConsolidator(
+        user_id=user_id,
+        graph_repository=build_memory_graph_repository(),
+        profile_summarizer=MemoryProfileSummarizer(
+            llm=llm,
+            json_parser=RepairJSONParser(),
+        ),
+    )
 
 
 async def _load_user_app_config(user_id: str) -> AppConfig:

@@ -15,3 +15,9 @@ class CeleryTaskDispatcher(TaskDispatcher):
         from app.tasks.memory.extract import extract_memory_task
 
         extract_memory_task.delay(memory_id)
+
+    async def dispatch_consolidate_memory(self, user_id: str) -> None:
+        """发送长期记忆巩固任务到 broker。"""
+        from app.tasks.memory.consolidate import consolidate_memory_task
+
+        consolidate_memory_task.delay(user_id)
