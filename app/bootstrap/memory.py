@@ -4,10 +4,12 @@ from app.bootstrap.notebook import build_embedding_model, build_task_dispatcher
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.app_config import AppConfig
+from app.domain.services.memory.consolidator import MemoryConsolidator
 from app.domain.services.memory.fact_extractor import MemoryFactExtractor
-from app.domain.services.memory.consolidation import MemoryConsolidator
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
+from app.domain.services.memory.insight_generator import MemoryInsightGenerator
 from app.domain.services.memory.profile_summarizer import MemoryProfileSummarizer
+from app.domain.services.memory.reflector import MemoryReflector
 from app.infrastructure.external.json_parser.repair_json_parser import RepairJSONParser
 from app.infrastructure.external.llm.openai_llm import OpenAILLM
 from app.infrastructure.repositories.neo4j_memory_graph_repository import (
@@ -68,6 +70,22 @@ async def build_memory_consolidation_service_for_user(
             llm=llm,
             json_parser=RepairJSONParser(),
         ),
+    )
+
+
+async def build_memory_reflector_for_user(user_id: str) -> MemoryReflector:
+    """按用户应用配置组装记忆反思器。"""
+    app_config = await _load_user_app_config(user_id)
+    llm = OpenAILLM(app_config.llm_config)
+    embedding = await build_embedding_model(user_id)
+    return MemoryReflector(
+        user_id=user_id,
+        graph_repository=build_memory_graph_repository(),
+        insight_generator=MemoryInsightGenerator(
+            llm=llm,
+            json_parser=RepairJSONParser(),
+        ),
+        embedding=embedding,
     )
 
 

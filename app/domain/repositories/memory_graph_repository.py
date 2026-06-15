@@ -2,6 +2,7 @@ from typing import Protocol
 
 from app.domain.models.memory_graph import (
     EntityNode,
+    InsightResult,
     MemoryGraph,
     MemoryGraphResult,
     MemoryPromotionStats,
@@ -64,4 +65,44 @@ class MemoryGraphRepository(Protocol):
         traits: list[str],
     ) -> None:
         """回写长期实体画像摘要。"""
+        ...
+
+    async def reflection_top_entities(
+        self, user_id: str, top_k: int
+    ) -> list[EntityNode]:
+        """返回反思使用的长期实体。"""
+        ...
+
+    async def reflection_entity_statements(
+        self, user_id: str, entity_id: str, limit: int
+    ) -> list[str]:
+        """返回反思使用的代表性陈述。"""
+        ...
+
+    async def upsert_insight(
+        self,
+        user_id: str,
+        theme: str,
+        content: str,
+        embedding: list[float] | None,
+        importance: float,
+        confidence: float,
+        source_count: int,
+        entity_ids: list[str],
+    ) -> str:
+        """按主题新增或更新高层洞察并重建实体溯源边。"""
+        ...
+
+    async def search_insights_by_vector(
+        self, user_id: str, query_embedding: list[float], top_k: int
+    ) -> list[InsightResult]:
+        """按向量检索当前用户洞察。"""
+        ...
+
+    async def list_insights(self, user_id: str) -> list[InsightResult]:
+        """列出当前用户洞察。"""
+        ...
+
+    async def count_insights(self, user_id: str) -> int:
+        """统计当前用户洞察数量。"""
         ...

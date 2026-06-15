@@ -32,7 +32,7 @@ from app.domain.models.file import File
 from app.domain.models.long_term_memory import MemorySource
 from app.domain.models.session import Session, SessionStatus
 from app.domain.repositories.vow import IUnitOfWork
-from app.domain.services.memory import LongTermMemoryManager
+from app.domain.services.memory import LongTermMemoryManager, MemoryActiveRecall
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ class AgentService:
         search_engine: SearchEngine,
         file_storage: FileStorage,
         memory: LongTermMemoryManager | None = None,
+        active_recall: MemoryActiveRecall | None = None,
     ) -> None:
         """构造函数，完成Agent服务的初始化"""
         self._uow_factory = uow_factory
@@ -66,6 +67,7 @@ class AgentService:
         self._search_engine = search_engine
         self._file_storage = file_storage
         self._memory = memory
+        self._active_recall = active_recall
         logger.info("AgentService初始化成功")
 
     async def _get_task(self, session: Session) -> Optional[Task]:
@@ -114,6 +116,7 @@ class AgentService:
             search_engine=self._search_engine,
             sandbox=sandbox,
             memory=self._memory,
+            active_recall=self._active_recall,
         )
 
         # 创建任务Task并更新会话中的信息

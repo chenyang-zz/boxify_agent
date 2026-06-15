@@ -46,3 +46,23 @@ PROFILE_SUMMARY_PROMPT = (
     "实体：{entity_name}（{entity_type}）\n"
     "陈述：{statements}"
 )
+
+REFLECT_SYSTEM_PROMPT = "你是记忆图谱反思器，只返回严格 JSON。"
+
+REFLECT_PROMPT = """
+基于给定的「用户记忆清单」，归纳 {min_insights}~{max_insights} 条高层洞察。
+每条洞察是对一类稳定信息的概括性结论，不要简单复述单条事实。
+
+只返回形如：
+{{"insights":[{{"theme":"音乐偏好","content":"用户偏好华语流行音乐。","based_on":["周杰伦"],"importance":0.8,"confidence":0.9}}]}}
+
+要求：
+- theme 是简短中文主题。
+- content 是一句可复用的用户理解，不超过 200 字。
+- based_on 只能引用记忆清单中出现过的实体名称。
+- importance/confidence 必须是 0 到 1 之间的小数。
+- 记忆清单过少或无法归纳时返回 {{"insights":[]}}。
+
+记忆清单：
+{memory_block}
+"""

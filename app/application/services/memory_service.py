@@ -6,13 +6,15 @@ from app.domain.external.json_parser import JSONParser
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource
-from app.domain.models.memory_graph import MemoryConsolidationStats
+from app.domain.models.memory_graph import MemoryConsolidationStats, MemoryReflectStats
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.memory import (
     LongTermMemoryManager,
     MemoryConsolidator,
+    MemoryInsightGenerator,
     MemoryProfileSummarizer,
+    MemoryReflector,
 )
 
 
@@ -31,8 +33,14 @@ class MemoryService:
     ) -> None:
         self._user_id = user_id
         self._graph_repository = graph_repository
+        self._embedding = embedding
         self._profile_summarizer = (
             MemoryProfileSummarizer(llm=llm, json_parser=json_parser)
+            if llm and json_parser
+            else None
+        )
+        self._insight_generator = (
+            MemoryInsightGenerator(llm=llm, json_parser=json_parser)
             if llm and json_parser
             else None
         )
@@ -92,3 +100,15 @@ class MemoryService:
             profile_summarizer=self._profile_summarizer,
         )
         return await service.consolidate()
+
+    async def reflect(self) -> MemoryReflectStats:
+        """手动执行当前用户记忆反思。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法执行反思")
+        reflector = MemoryReflector(
+            user_id=self._user_id,
+            graph_repository=self._graph_repository,
+            insight_generator=self._insight_generator,
+            embedding=self._embedding,
+        )
+        return await reflector.reflect()

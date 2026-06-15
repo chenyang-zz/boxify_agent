@@ -4,6 +4,7 @@ from app.domain.models.memory_graph import (
     ChunkNode,
     DialogueNode,
     EntityNode,
+    InsightResult,
     MemoryGraph,
     MemoryPromotionStats,
     RelationEdge,
@@ -323,6 +324,89 @@ async def test_neo4j_repository_lists_existing_entities_by_type_for_dedup():
     query, params = driver.executed[-1]
     assert "MATCH (entity:Entity {user_id: $user_id, type: $entity_type})" in query
     assert params == {"user_id": "user-a", "entity_type": "生命体"}
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_manages_insight_schema_upsert_and_vector_search():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "MATCH (entity:Entity {user_id: $user_id, memory_layer: 'long_term'})": [
+                {"id": "entity-1", "name": "周杰伦", "type": "生命体"}
+            ],
+            "MATCH (entity:Entity {id: $entity_id, user_id: $user_id})": [
+                {"text": "用户喜欢周杰伦。"}
+            ],
+            "vector.similarity.cosine": [
+                {
+                    "id": "insight-1",
+                    "theme": "音乐偏好",
+                    "content": "用户偏好华语流行音乐。",
+                    "importance": 0.8,
+                    "confidence": 0.9,
+                    "source_count": 2,
+                    "score": 0.92,
+                }
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    await repository.ensure_schema()
+    top_entities = await repository.reflection_top_entities("user-a", top_k=30)
+    statements = await repository.reflection_entity_statements(
+        "user-a", "entity-1", limit=5
+    )
+    await repository.upsert_insight(
+        user_id="user-a",
+        theme="音乐偏好",
+        content="用户偏好华语流行音乐。",
+        embedding=[0.1, 0.2],
+        importance=0.8,
+        confidence=0.9,
+        source_count=2,
+        entity_ids=["entity-1", "entity-2"],
+    )
+    insights = await repository.search_insights_by_vector(
+        "user-a", query_embedding=[0.1, 0.2], top_k=3
+    )
+
+    executed_queries = "\n".join(query for query, _ in driver.executed)
+    assert "CREATE CONSTRAINT memory_insight_id" in executed_queries
+    assert "CREATE VECTOR INDEX memory_insight_embedding" in executed_queries
+    assert top_entities[0].name == "周杰伦"
+    assert statements == ["用户喜欢周杰伦。"]
+    upsert_query, upsert_params = next(
+        (query, params) for query, params in driver.executed if "MERGE (insight:Insight" in query
+    )
+    assert "MERGE (insight:Insight {user_id: $user_id, theme: $theme})" in upsert_query
+    assert "DELETE derived" in upsert_query
+    assert upsert_params["entity_ids"] == ["entity-1", "entity-2"]
+    insight_query, insight_params = driver.executed[-1]
+    assert "MATCH (insight:Insight {user_id: $user_id})" in insight_query
+    assert "vector.similarity.cosine(insight.embedding, $query_embedding)" in insight_query
+    assert "LIMIT $top_k" in insight_query
+    assert "memory_insight_embedding" not in insight_query
+    assert "db.index.vector.queryNodes" not in insight_query
+    assert insight_params == {
+        "user_id": "user-a",
+        "query_embedding": [0.1, 0.2],
+        "top_k": 3,
+    }
+    assert insights == [
+        InsightResult(
+            id="insight-1",
+            theme="音乐偏好",
+            content="用户偏好华语流行音乐。",
+            importance=0.8,
+            confidence=0.9,
+            source_count=2,
+            score=0.92,
+        )
+    ]
 
 
 class FakeNeo4jDriver:

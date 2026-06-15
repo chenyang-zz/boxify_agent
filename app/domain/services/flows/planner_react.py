@@ -19,15 +19,16 @@ from app.domain.models.message import Message
 from app.domain.models.plan import ExecutionStatus, Plan, Step
 from app.domain.models.session import SessionStatus
 from app.domain.repositories.vow import IUnitOfWork
-from app.domain.services.memory import MemorySearch
 from app.domain.services.agents.planner import PlannerAgent
 from app.domain.services.agents.react import ReActAgent
 from app.domain.services.flows.base import BaseFlow, FlowStatus
+from app.domain.services.memory import MemoryActiveRecall, MemorySearch
 from app.domain.services.tools.a2a import A2ATool
+from app.domain.services.tools.base import BaseTool
 from app.domain.services.tools.browser import BrowserTool
 from app.domain.services.tools.file import FileTool
-from app.domain.services.tools.memory import MemoryTool
 from app.domain.services.tools.mcp import MCPTool
+from app.domain.services.tools.memory import MemoryTool
 from app.domain.services.tools.message import MessageTool
 from app.domain.services.tools.search import SearchTool
 from app.domain.services.tools.shell import ShellTool
@@ -51,6 +52,7 @@ class PlannerReActFlow(BaseFlow):
         mcp_tool: MCPTool,  # mcp工具
         a2a_tool: A2ATool,  # a2a远程agent
         memory: MemorySearch | None = None,
+        active_recall: MemoryActiveRecall | None = None,
     ) -> None:
         """构造函数，完成规划与执行流的初始化"""
         # 流初始化数据配置
@@ -58,9 +60,10 @@ class PlannerReActFlow(BaseFlow):
         self._session_id = session_id
         self.status = FlowStatus.IDLE
         self.plan: Optional[Plan] = None
+        self._active_recall = active_recall
 
         # 初始化Agent预设工具列表
-        tools = [
+        tools: list[BaseTool] = [
             FileTool(sandbox=sandbox),
             ShellTool(sandbox=sandbox),
             BrowserTool(browser=browser),
@@ -126,12 +129,11 @@ class PlannerReActFlow(BaseFlow):
 
         # 更新会话状态为运行中
         async with self._uow_factory() as uow:
-            await uow.session.update_status(
-                self._session_id, SessionStatus.RUNNING
-            )
+            await uow.session.update_status(self._session_id, SessionStatus.RUNNING)
 
         # 获取当前会话中最新事件
         self.plan = session.get_latest_plan()
+        message = await self._message_with_active_recall(message)
         logger.info(f"Planner&ReAct流接收消息: {message.message[:50]}...")
 
         # 定义当前正在执行的子步骤
@@ -246,6 +248,18 @@ class PlannerReActFlow(BaseFlow):
         # 任务已经结束，返回结束事件
         yield DoneEvent()
         logger.info("Planner&ReAct流处理任务消息已完毕")
+
+    async def _message_with_active_recall(self, message: Message) -> Message:
+        """为传给 LLM 的用户消息前置主动召回背景。"""
+        if not self._active_recall:
+            return message
+        context = await self._active_recall.recall_context(message.message)
+        if not context:
+            return message
+        return Message(
+            message=f"{context}\n\n当前用户问题：\n{message.message}",
+            attachments=message.attachments,
+        )
 
     @property
     def done(self) -> bool:
