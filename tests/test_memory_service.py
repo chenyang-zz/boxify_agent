@@ -4,6 +4,10 @@ from app.application.errors.exceptions import BadRequestError, NotFoundError
 from app.application.services.memory_service import MemoryService
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource, MemoryStatus
 from app.domain.models.memory_graph import (
+    CommunityMemberResult,
+    CommunityRelationResult,
+    CommunityResult,
+    CommunityVoteEntity,
     EntityNode,
     GraphRelationFact,
     MemoryConsolidationStats,
@@ -11,6 +15,7 @@ from app.domain.models.memory_graph import (
     MemoryPromotionStats,
 )
 from app.domain.services.memory import LongTermMemoryManager, MemoryConsolidator
+from app.domain.services.memory.community_clusterer import MemoryCommunityClusterer
 from app.domain.services.memory.profile_summarizer import MemoryProfileSummarizer
 
 
@@ -367,6 +372,43 @@ async def test_application_memory_service_converts_missing_delete_to_not_found()
     assert exc.value.msg == "记忆不存在或无权访问"
 
 
+@pytest.mark.anyio
+async def test_application_memory_service_clusters_and_lists_communities():
+    repository = FakeCommunityServiceGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    stats = await service.cluster()
+    communities = await service.list_communities()
+    members, relationships = await service.community_detail("community-music")
+
+    assert stats.assigned_entities == 1
+    assert communities == [
+        CommunityResult(
+            id="community-music",
+            name="音乐偏好",
+            summary="用户的音乐相关实体",
+            member_count=1,
+        )
+    ]
+    assert members[0].entity_name == "周杰伦"
+    assert relationships[0].name == "偏好"
+
+
+@pytest.mark.anyio
+async def test_memory_community_clusterer_is_available_for_service_layer():
+    repository = FakeCommunityServiceGraphRepository()
+    clusterer = MemoryCommunityClusterer(user_id="user-a", graph_repository=repository)
+
+    stats = await clusterer.cluster()
+
+    assert stats.assigned_entities == 1
+    assert repository.clustered is True
+
+
 class InMemoryMemoryRepository:
     def __init__(self):
         self.saved = []
@@ -498,6 +540,80 @@ class FakeConsolidationGraphRepository(FakeGraphRepository):
 
     async def write_entity_profile(self, user_id, entity_id, core_facts, traits):
         self.profile_writes.append((user_id, entity_id, core_facts, traits))
+
+
+class FakeCommunityServiceGraphRepository(FakeGraphRepository):
+    def __init__(self):
+        super().__init__([])
+        self.clustered = False
+
+    async def has_communities(self, user_id):
+        return False
+
+    async def dialogue_entity_ids(self, user_id, dialogue_id):
+        return []
+
+    async def community_vote_entities(self, user_id, entity_ids=None):
+        return [
+            CommunityVoteEntity(
+                id="entity-1",
+                user_id="user-a",
+                name="周杰伦",
+                type="生命体",
+                embedding=[1.0],
+            )
+        ]
+
+    async def community_vote_neighbors(self, user_id, entity_ids):
+        return {"entity-1": []}
+
+    async def upsert_community(self, user_id, community_id):
+        return None
+
+    async def assign_entity_community(self, user_id, entity_id, community_id):
+        self.clustered = True
+
+    async def refresh_community_member_count(self, user_id, community_id):
+        return 1
+
+    async def community_members(self, user_id, community_id):
+        return [
+            CommunityMemberResult(
+                entity_id="entity-1",
+                entity_name="周杰伦",
+                entity_type="生命体",
+                description="歌手",
+                community_id=community_id,
+            )
+        ]
+
+    async def community_relationships(self, user_id, community_id):
+        return [
+            CommunityRelationResult(
+                source_entity_id="entity-user",
+                source_name="用户",
+                target_entity_id="entity-1",
+                target_name="周杰伦",
+                name="偏好",
+                evidence="用户喜欢周杰伦。",
+            )
+        ]
+
+    async def update_community_metadata(self, user_id, community_id, name, summary):
+        return None
+
+    async def list_communities(self, user_id):
+        return [
+            CommunityResult(
+                id="community-music",
+                name="音乐偏好",
+                summary="用户的音乐相关实体",
+                member_count=1,
+            )
+        ]
+
+    async def prune_empty_communities(self, user_id):
+        return None
 
 
 class FakeProfileSummarizer:

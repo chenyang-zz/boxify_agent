@@ -68,6 +68,31 @@ async def test_extract_memory_task_notifies_reflection_trigger_after_success():
 
 
 @pytest.mark.anyio
+async def test_extract_memory_task_dispatches_cluster_after_success():
+    repository = InMemoryMemoryRepository()
+    memory = LongTermMemory(user_id="user-a", content="用户喜欢周杰伦。")
+    await repository.save(memory)
+    dispatcher = FakeTaskDispatcher()
+
+    await run_extract_memory(
+        memory_id=memory.id,
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        pipeline_factory=lambda user_id: FakePipeline(
+            MemoryGraphStats(
+                dialogue_id="dialogue-1",
+                chunks=1,
+                statements=1,
+                entities=2,
+                relations=1,
+            )
+        ),
+        task_dispatcher=dispatcher,
+    )
+
+    assert dispatcher.cluster_calls == [("user-a", "dialogue-1")]
+
+
+@pytest.mark.anyio
 async def test_celery_dispatch_reflect_memory_waits_until_threshold(monkeypatch):
     redis = FakeRedis()
     monkeypatch.setattr(
@@ -130,6 +155,19 @@ async def test_celery_dispatch_reflect_memory_ignores_non_positive_count(monkeyp
 
 
 @pytest.mark.anyio
+async def test_celery_dispatch_cluster_memory_sends_task(monkeypatch):
+    delayed = []
+    monkeypatch.setattr(
+        "app.tasks.memory.cluster.cluster_memory_task.delay",
+        lambda user_id, dialogue_id: delayed.append((user_id, dialogue_id)),
+    )
+
+    await CeleryTaskDispatcher().dispatch_cluster_memory("user-a", "dialogue-1")
+
+    assert delayed == [("user-a", "dialogue-1")]
+
+
+@pytest.mark.anyio
 async def test_extract_memory_task_ignores_reflection_dispatch_failure():
     repository = InMemoryMemoryRepository()
     memory = LongTermMemory(user_id="user-a", content="用户喜欢周杰伦。")
@@ -148,6 +186,31 @@ async def test_extract_memory_task_ignores_reflection_dispatch_failure():
             )
         ),
         task_dispatcher=ExplodingTaskDispatcher(),
+    )
+
+    updated = await repository.get_by_user("user-a", memory.id)
+    assert updated.status == MemoryStatus.COMPLETED
+
+
+@pytest.mark.anyio
+async def test_extract_memory_task_ignores_cluster_dispatch_failure():
+    repository = InMemoryMemoryRepository()
+    memory = LongTermMemory(user_id="user-a", content="用户喜欢周杰伦。")
+    await repository.save(memory)
+
+    await run_extract_memory(
+        memory_id=memory.id,
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        pipeline_factory=lambda user_id: FakePipeline(
+            MemoryGraphStats(
+                dialogue_id="dialogue-1",
+                chunks=1,
+                statements=1,
+                entities=2,
+                relations=1,
+            )
+        ),
+        task_dispatcher=ExplodingClusterTaskDispatcher(),
     )
 
     updated = await repository.get_by_user("user-a", memory.id)
@@ -216,12 +279,27 @@ class FakeSettings:
 class FakeTaskDispatcher:
     def __init__(self):
         self.reflect_calls = []
+        self.cluster_calls = []
 
     async def dispatch_reflect_memory(self, user_id: str, entity_count: int) -> bool:
         self.reflect_calls.append((user_id, entity_count))
         return False
 
+    async def dispatch_cluster_memory(self, user_id: str, dialogue_id: str) -> None:
+        self.cluster_calls.append((user_id, dialogue_id))
+
 
 class ExplodingTaskDispatcher:
     async def dispatch_reflect_memory(self, user_id: str, entity_count: int) -> bool:
         raise RuntimeError("dispatch failed")
+
+    async def dispatch_cluster_memory(self, user_id: str, dialogue_id: str) -> None:
+        return None
+
+
+class ExplodingClusterTaskDispatcher:
+    async def dispatch_reflect_memory(self, user_id: str, entity_count: int) -> bool:
+        return False
+
+    async def dispatch_cluster_memory(self, user_id: str, dialogue_id: str) -> None:
+        raise RuntimeError("cluster dispatch failed")

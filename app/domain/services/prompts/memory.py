@@ -66,3 +66,24 @@ REFLECT_PROMPT = """
 记忆清单：
 {memory_block}
 """
+
+COMMUNITY_SUMMARY_SYSTEM_PROMPT = "你是记忆图谱社区命名器，只返回严格 JSON。"
+
+COMMUNITY_SUMMARY_PROMPT = """
+以下是一组语义相关的用户记忆实体和社区内部关系。
+请为这个社区生成简洁中文名称和一句摘要。
+
+只返回形如：
+{{"name":"音乐偏好","summary":"用户的音乐兴趣、歌手偏好和相关作品。"}}
+
+要求：
+- name 不超过 10 个中文字符。
+- summary 不超过 80 个中文字符。
+- 不要编造实体和关系中不存在的信息。
+
+实体：
+{members}
+
+关系：
+{relationships}
+"""

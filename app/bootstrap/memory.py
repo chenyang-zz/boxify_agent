@@ -4,6 +4,8 @@ from app.bootstrap.notebook import build_embedding_model, build_task_dispatcher
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.app_config import AppConfig
+from app.domain.services.memory.community_clusterer import MemoryCommunityClusterer
+from app.domain.services.memory.community_summarizer import MemoryCommunitySummarizer
 from app.domain.services.memory.consolidator import MemoryConsolidator
 from app.domain.services.memory.fact_extractor import MemoryFactExtractor
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
@@ -86,6 +88,22 @@ async def build_memory_reflector_for_user(user_id: str) -> MemoryReflector:
             json_parser=RepairJSONParser(),
         ),
         embedding=embedding,
+    )
+
+
+async def build_memory_community_clusterer_for_user(
+    user_id: str,
+) -> MemoryCommunityClusterer:
+    """按用户应用配置组装记忆社区聚类器。"""
+    app_config = await _load_user_app_config(user_id)
+    llm = OpenAILLM(app_config.llm_config)
+    return MemoryCommunityClusterer(
+        user_id=user_id,
+        graph_repository=build_memory_graph_repository(),
+        summarizer=MemoryCommunitySummarizer(
+            llm=llm,
+            json_parser=RepairJSONParser(),
+        ),
     )
 
 

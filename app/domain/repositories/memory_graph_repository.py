@@ -1,6 +1,11 @@
 from typing import Protocol
 
 from app.domain.models.memory_graph import (
+    CommunityMemberResult,
+    CommunityRelationResult,
+    CommunityResult,
+    CommunityVoteEntity,
+    CommunityVoteNeighbor,
     EntityNode,
     InsightResult,
     MemoryGraph,
@@ -105,4 +110,66 @@ class MemoryGraphRepository(Protocol):
 
     async def count_insights(self, user_id: str) -> int:
         """统计当前用户洞察数量。"""
+        ...
+
+    async def has_communities(self, user_id: str) -> bool:
+        """判断当前用户是否已有社区。"""
+        ...
+
+    async def dialogue_entity_ids(self, user_id: str, dialogue_id: str) -> list[str]:
+        """读取一次记忆萃取写入后关联的实体 ID。"""
+        ...
+
+    async def community_vote_entities(
+        self, user_id: str, entity_ids: list[str] | None = None
+    ) -> list[CommunityVoteEntity]:
+        """读取社区聚类投票所需实体。"""
+        ...
+
+    async def community_vote_neighbors(
+        self, user_id: str, entity_ids: list[str]
+    ) -> dict[str, list[CommunityVoteNeighbor]]:
+        """读取实体一跳邻居及其社区标签，用于 LPA 投票。"""
+        ...
+
+    async def upsert_community(self, user_id: str, community_id: str) -> None:
+        """创建或保留社区节点。"""
+        ...
+
+    async def assign_entity_community(
+        self, user_id: str, entity_id: str, community_id: str
+    ) -> None:
+        """将实体归入社区。"""
+        ...
+
+    async def refresh_community_member_count(
+        self, user_id: str, community_id: str
+    ) -> int:
+        """刷新并返回社区成员数。"""
+        ...
+
+    async def community_members(
+        self, user_id: str, community_id: str
+    ) -> list[CommunityMemberResult]:
+        """读取社区成员实体。"""
+        ...
+
+    async def community_relationships(
+        self, user_id: str, community_id: str
+    ) -> list[CommunityRelationResult]:
+        """读取社区内部关系事实。"""
+        ...
+
+    async def update_community_metadata(
+        self, user_id: str, community_id: str, name: str, summary: str
+    ) -> None:
+        """更新社区名称和摘要。"""
+        ...
+
+    async def list_communities(self, user_id: str) -> list[CommunityResult]:
+        """列出当前用户社区。"""
+        ...
+
+    async def prune_empty_communities(self, user_id: str) -> None:
+        """清理当前用户空社区。"""
         ...

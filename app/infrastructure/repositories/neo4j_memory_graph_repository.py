@@ -2,6 +2,11 @@ import logging
 from typing import Any
 
 from app.domain.models.memory_graph import (
+    CommunityMemberResult,
+    CommunityRelationResult,
+    CommunityResult,
+    CommunityVoteEntity,
+    CommunityVoteNeighbor,
     EntityNode,
     GraphRelationFact,
     InsightResult,
@@ -52,6 +57,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 "FOR (i:Insight) REQUIRE (i.id, i.user_id) IS UNIQUE"
             ),
             (
+                "CREATE CONSTRAINT memory_community_id IF NOT EXISTS "
+                "FOR (c:Community) REQUIRE (c.id, c.user_id) IS UNIQUE"
+            ),
+            (
                 "CREATE INDEX memory_entity_name IF NOT EXISTS "
                 "FOR (e:Entity) ON (e.user_id, e.name, e.type)"
             ),
@@ -62,6 +71,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             (
                 "CREATE INDEX memory_entity_layer IF NOT EXISTS "
                 "FOR (e:Entity) ON (e.user_id, e.memory_layer)"
+            ),
+            (
+                "CREATE INDEX memory_community_user IF NOT EXISTS "
+                "FOR (c:Community) ON (c.user_id, c.id)"
             ),
             (
                 "CREATE FULLTEXT INDEX memory_entity_fulltext IF NOT EXISTS "
@@ -417,6 +430,242 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             rows = await result.data()
         return int((rows[0] if rows else {}).get("count") or 0)
 
+    async def has_communities(self, user_id: str) -> bool:
+        """判断当前用户是否已有社区。"""
+        cypher = """
+        MATCH (community:Community {user_id: $user_id})
+        RETURN count(community) AS count
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return int((rows[0] if rows else {}).get("count") or 0) > 0
+
+    async def dialogue_entity_ids(self, user_id: str, dialogue_id: str) -> list[str]:
+        """读取一次记忆萃取关联到的实体 ID。"""
+        cypher = """
+        MATCH (dialogue:Dialogue {id: $dialogue_id, user_id: $user_id})
+            -[:HAS_CHUNK]->(:Chunk)
+            -[:HAS_STATEMENT]->(:Statement)
+            -[:MENTIONS]->(entity:Entity {user_id: $user_id})
+        RETURN DISTINCT entity.id AS id
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                dialogue_id=dialogue_id,
+            )
+            rows = await result.data()
+        return [str(row.get("id")) for row in rows if row.get("id")]
+
+    async def community_vote_entities(
+        self, user_id: str, entity_ids: list[str] | None = None
+    ) -> list[CommunityVoteEntity]:
+        """读取社区聚类投票所需实体。"""
+        where_clause = "WHERE entity.id IN $entity_ids" if entity_ids is not None else ""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        """ + where_clause + """
+        RETURN entity.id AS id,
+               entity.name AS name,
+               entity.type AS type,
+               entity.description AS description,
+               coalesce(entity.embedding, []) AS embedding,
+               entity.community_id AS community_id
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                entity_ids=entity_ids,
+            )
+            rows = await result.data()
+        return [self._row_to_community_vote_entity(row, user_id) for row in rows]
+
+    async def community_vote_neighbors(
+        self, user_id: str, entity_ids: list[str]
+    ) -> dict[str, list[CommunityVoteNeighbor]]:
+        """读取实体一跳邻居及其社区标签。"""
+        if not entity_ids:
+            return {}
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        WHERE entity.id IN $entity_ids
+        OPTIONAL MATCH (entity)-[:RELATION]-(neighbor:Entity {user_id: $user_id})
+        WITH entity, neighbor
+        WHERE neighbor IS NOT NULL
+        RETURN entity.id AS entity_id,
+               neighbor.id AS id,
+               neighbor.community_id AS community_id,
+               coalesce(neighbor.embedding, []) AS embedding
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                entity_ids=entity_ids,
+            )
+            rows = await result.data()
+        grouped: dict[str, list[CommunityVoteNeighbor]] = {}
+        for row in rows:
+            grouped.setdefault(str(row.get("entity_id")), []).append(
+                self._row_to_community_vote_neighbor(row)
+            )
+        return grouped
+
+    async def upsert_community(self, user_id: str, community_id: str) -> None:
+        """创建或保留社区节点。"""
+        cypher = """
+        MERGE (community:Community {id: $community_id, user_id: $user_id})
+        ON CREATE SET community.name = $community_id,
+                      community.summary = '',
+                      community.member_count = 0,
+                      community.created_at = datetime()
+        SET community.updated_at = datetime()
+        """
+        async with self._driver.session(database=self._database) as session:
+            await session.run(cypher, user_id=user_id, community_id=community_id)
+
+    async def assign_entity_community(
+        self, user_id: str, entity_id: str, community_id: str
+    ) -> None:
+        """将实体归入社区，并维护 IN_COMMUNITY 边。"""
+        cypher = """
+        MATCH (entity:Entity {id: $entity_id, user_id: $user_id})
+        MATCH (community:Community {id: $community_id, user_id: $user_id})
+        OPTIONAL MATCH (entity)-[old:IN_COMMUNITY {user_id: $user_id}]->(:Community)
+        DELETE old
+        SET entity.community_id = $community_id
+        MERGE (entity)-[:IN_COMMUNITY {user_id: $user_id}]->(community)
+        """
+        async with self._driver.session(database=self._database) as session:
+            await session.run(
+                cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+                community_id=community_id,
+            )
+
+    async def refresh_community_member_count(
+        self, user_id: str, community_id: str
+    ) -> int:
+        """刷新并返回社区成员数。"""
+        cypher = """
+        MATCH (community:Community {id: $community_id, user_id: $user_id})
+        OPTIONAL MATCH (entity:Entity {user_id: $user_id, community_id: $community_id})
+        WITH community, count(entity) AS count
+        SET community.member_count = count,
+            community.updated_at = datetime()
+        RETURN count(entity) AS count
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                community_id=community_id,
+            )
+            rows = await result.data()
+        return int((rows[0] if rows else {}).get("count") or 0)
+
+    async def community_members(
+        self, user_id: str, community_id: str
+    ) -> list[CommunityMemberResult]:
+        """读取社区成员实体。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id, community_id: $community_id})
+        RETURN entity.id AS entity_id,
+               entity.name AS entity_name,
+               entity.type AS entity_type,
+               entity.description AS description,
+               entity.community_id AS community_id,
+               coalesce(entity.embedding, []) AS embedding,
+               coalesce(entity.importance, 0.5) AS importance,
+               coalesce(entity.mention_count, 0) AS mention_count,
+               coalesce(entity.access_count, 0) AS access_count
+        ORDER BY coalesce(entity.importance, 0.5) DESC,
+                 coalesce(entity.mention_count, 0) DESC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                community_id=community_id,
+            )
+            rows = await result.data()
+        return [self._row_to_community_member(row) for row in rows]
+
+    async def community_relationships(
+        self, user_id: str, community_id: str
+    ) -> list[CommunityRelationResult]:
+        """读取社区内部关系事实。"""
+        cypher = """
+        MATCH (source:Entity {user_id: $user_id, community_id: $community_id})
+            -[relation:RELATION]->
+            (target:Entity {user_id: $user_id, community_id: $community_id})
+        RETURN source.id AS source_entity_id,
+               source.name AS source_name,
+               target.id AS target_entity_id,
+               target.name AS target_name,
+               relation.name AS name,
+               relation.evidence AS evidence
+        ORDER BY coalesce(relation.importance, 0.5) DESC
+        LIMIT 50
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                community_id=community_id,
+            )
+            rows = await result.data()
+        return [self._row_to_community_relation(row) for row in rows]
+
+    async def update_community_metadata(
+        self, user_id: str, community_id: str, name: str, summary: str
+    ) -> None:
+        """更新社区名称和摘要。"""
+        cypher = """
+        MATCH (community:Community {id: $community_id, user_id: $user_id})
+        SET community.name = $name,
+            community.summary = $summary,
+            community.updated_at = datetime()
+        """
+        async with self._driver.session(database=self._database) as session:
+            await session.run(
+                cypher,
+                user_id=user_id,
+                community_id=community_id,
+                name=name,
+                summary=summary,
+            )
+
+    async def list_communities(self, user_id: str) -> list[CommunityResult]:
+        """列出当前用户社区。"""
+        cypher = """
+        MATCH (community:Community {user_id: $user_id})
+        RETURN community.id AS id,
+               community.name AS name,
+               community.summary AS summary,
+               coalesce(community.member_count, 0) AS member_count
+        ORDER BY coalesce(community.member_count, 0) DESC,
+                 community.name ASC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return [self._row_to_community_result(row) for row in rows]
+
+    async def prune_empty_communities(self, user_id: str) -> None:
+        """删除当前用户空社区。"""
+        cypher = """
+        MATCH (community:Community {user_id: $user_id})
+        WHERE coalesce(community.member_count, 0) = 0
+        DETACH DELETE community
+        """
+        async with self._driver.session(database=self._database) as session:
+            await session.run(cypher, user_id=user_id)
+
     async def _search_fulltext(
         self, user_id: str, query: str, top_k: int
     ) -> list[dict[str, Any]]:
@@ -671,6 +920,68 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             source_memory_summary=entity.get("memory_summary") or None,
             relations=relations,
             score=float(row.get("score") or 0),
+        )
+
+    @staticmethod
+    def _row_to_community_vote_entity(
+        row: dict[str, Any],
+        user_id: str,
+    ) -> CommunityVoteEntity:
+        """把 Neo4j 行转换为社区聚类投票实体。"""
+        return CommunityVoteEntity(
+            id=str(row.get("id") or ""),
+            user_id=user_id,
+            name=str(row.get("name") or ""),
+            type=str(row.get("type") or ""),
+            description=str(row.get("description") or ""),
+            embedding=row.get("embedding") or [],
+            community_id=row.get("community_id"),
+        )
+
+    @staticmethod
+    def _row_to_community_vote_neighbor(row: dict[str, Any]) -> CommunityVoteNeighbor:
+        """把 Neo4j 行转换为社区聚类投票邻居。"""
+        return CommunityVoteNeighbor(
+            id=str(row.get("id") or ""),
+            community_id=row.get("community_id"),
+            embedding=row.get("embedding") or [],
+        )
+
+    @staticmethod
+    def _row_to_community_result(row: dict[str, Any]) -> CommunityResult:
+        """把 Neo4j 行转换为社区列表项。"""
+        return CommunityResult(
+            id=str(row.get("id") or ""),
+            name=str(row.get("name") or ""),
+            summary=str(row.get("summary") or ""),
+            member_count=int(row.get("member_count") or 0),
+        )
+
+    @staticmethod
+    def _row_to_community_member(row: dict[str, Any]) -> CommunityMemberResult:
+        """把 Neo4j 行转换为社区成员。"""
+        return CommunityMemberResult(
+            entity_id=str(row.get("entity_id") or ""),
+            entity_name=str(row.get("entity_name") or ""),
+            entity_type=str(row.get("entity_type") or ""),
+            description=str(row.get("description") or ""),
+            community_id=str(row.get("community_id") or ""),
+            embedding=[float(value) for value in row.get("embedding") or []],
+            importance=float(row.get("importance") or 0.5),
+            mention_count=int(row.get("mention_count") or 0),
+            access_count=int(row.get("access_count") or 0),
+        )
+
+    @staticmethod
+    def _row_to_community_relation(row: dict[str, Any]) -> CommunityRelationResult:
+        """把 Neo4j 行转换为社区内部关系。"""
+        return CommunityRelationResult(
+            source_entity_id=str(row.get("source_entity_id") or ""),
+            source_name=str(row.get("source_name") or ""),
+            target_entity_id=str(row.get("target_entity_id") or ""),
+            target_name=str(row.get("target_name") or ""),
+            name=str(row.get("name") or ""),
+            evidence=str(row.get("evidence") or ""),
         )
 
     @staticmethod

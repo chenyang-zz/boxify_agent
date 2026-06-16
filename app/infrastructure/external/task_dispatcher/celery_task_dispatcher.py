@@ -1,6 +1,5 @@
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.infrastructure.storage.redis import get_redis
-from app.tasks.memory.reflect import reflect_memory_task
 from core.config import get_settings
 
 _REFLECTION_TRIGGER_SCRIPT = """
@@ -50,5 +49,13 @@ class CeleryTaskDispatcher(TaskDispatcher):
         if int(should_dispatch) != 1:
             return False
 
+        from app.tasks.memory.reflect import reflect_memory_task
+
         reflect_memory_task.delay(user_id)
         return True
+
+    async def dispatch_cluster_memory(self, user_id: str, dialogue_id: str) -> None:
+        """发送长期记忆社区聚类任务到 broker。"""
+        from app.tasks.memory.cluster import cluster_memory_task
+
+        cluster_memory_task.delay(user_id, dialogue_id)

@@ -111,6 +111,18 @@ class Settings(BaseSettings):
     # 注入 Agent 上下文的主动召回文本最大字符数
     memory_active_recall_max_chars: int = 1200
 
+    # 记忆社区聚类的 LPA 迭代、权重、合并阈值和元数据采样限制
+    # LPA 最多迭代轮数
+    memory_community_max_iterations: int = 10
+    # 平均向量余弦大于该值时合并社区
+    memory_community_merge_threshold: float = 0.85
+    # 邻居语义相似度投票权重
+    memory_community_semantic_weight: float = 0.6
+    # 一跳关系连接投票权重
+    memory_community_relation_weight: float = 0.4
+    # 生成社区名称/摘要时最多采样的成员数量
+    memory_community_metadata_member_limit: int = 20
+
     # Elasticsearch配置
     # Elasticsearch HTTP 地址，用于 Notebook 知识库混合检索
     elasticsearch_url: str = "http://localhost:9200"

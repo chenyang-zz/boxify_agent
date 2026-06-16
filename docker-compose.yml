@@ -43,7 +43,7 @@ services:
     image: neo4j:5.26-community
     container_name: neo4j-server
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-neo4j-password}
+      NEO4J_AUTH: neo4j/neo4j
       NEO4J_PLUGINS: '["apoc"]'
       TZ: Asia/Shanghai
     ports:

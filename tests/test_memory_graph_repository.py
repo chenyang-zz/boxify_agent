@@ -2,6 +2,10 @@ import pytest
 
 from app.domain.models.memory_graph import (
     ChunkNode,
+    CommunityMemberResult,
+    CommunityRelationResult,
+    CommunityResult,
+    CommunityVoteNeighbor,
     DialogueNode,
     EntityNode,
     InsightResult,
@@ -407,6 +411,149 @@ async def test_neo4j_repository_manages_insight_schema_upsert_and_vector_search(
             score=0.92,
         )
     ]
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_manages_community_schema_assignment_and_queries():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "RETURN count(community) AS count": [{"count": 1}],
+            "dialogue:Dialogue {id: $dialogue_id, user_id: $user_id}": [
+                {"id": "entity-1"},
+                {"id": "entity-2"},
+            ],
+            "WHERE entity.id IN $entity_ids\n        RETURN entity.id AS id": [
+                {
+                    "id": "entity-1",
+                    "name": "周杰伦",
+                    "type": "生命体",
+                    "description": "歌手",
+                    "embedding": [0.1, 0.2],
+                    "community_id": "community-music",
+                }
+            ],
+            "neighbor.id AS id": [
+                {
+                    "entity_id": "entity-1",
+                    "id": "entity-2",
+                    "community_id": "community-music",
+                    "embedding": [0.2, 0.3],
+                }
+            ],
+            "RETURN count(entity) AS count": [{"count": 2}],
+            "RETURN community.id AS id": [
+                {
+                    "id": "community-music",
+                    "name": "音乐偏好",
+                    "summary": "用户的音乐相关实体",
+                    "member_count": 2,
+                }
+            ],
+            "RETURN entity.id AS entity_id": [
+                {
+                    "entity_id": "entity-1",
+                    "entity_name": "周杰伦",
+                    "entity_type": "生命体",
+                    "description": "歌手",
+                    "community_id": "community-music",
+                    "embedding": [0.1, 0.2],
+                    "importance": 0.8,
+                    "mention_count": 2,
+                    "access_count": 1,
+                }
+            ],
+            "RETURN source.id AS source_entity_id": [
+                {
+                    "source_entity_id": "entity-user",
+                    "source_name": "用户",
+                    "target_entity_id": "entity-1",
+                    "target_name": "周杰伦",
+                    "name": "偏好",
+                    "evidence": "用户喜欢周杰伦。",
+                }
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    await repository.ensure_schema()
+    assert await repository.has_communities("user-a") is True
+    assert await repository.dialogue_entity_ids("user-a", "dialogue-1") == [
+        "entity-1",
+        "entity-2",
+    ]
+    vote_entities = await repository.community_vote_entities(
+        "user-a", ["entity-1"]
+    )
+    neighbors = await repository.community_vote_neighbors("user-a", ["entity-1"])
+    await repository.upsert_community("user-a", "community-music")
+    await repository.assign_entity_community("user-a", "entity-1", "community-music")
+    assert await repository.refresh_community_member_count(
+        "user-a", "community-music"
+    ) == 2
+    communities = await repository.list_communities("user-a")
+    members = await repository.community_members("user-a", "community-music")
+    relationships = await repository.community_relationships(
+        "user-a", "community-music"
+    )
+    await repository.update_community_metadata(
+        "user-a", "community-music", "音乐偏好", "用户的音乐相关实体"
+    )
+    await repository.prune_empty_communities("user-a")
+
+    executed_queries = "\n".join(query for query, _ in driver.executed)
+    assert "CREATE CONSTRAINT memory_community_id" in executed_queries
+    assert "CREATE INDEX memory_community_user" in executed_queries
+    assert "MERGE (community:Community {id: $community_id, user_id: $user_id})" in executed_queries
+    assert "MERGE (entity)-[:IN_COMMUNITY {user_id: $user_id}]->(community)" in executed_queries
+    assert vote_entities[0].community_id == "community-music"
+    assert neighbors == {
+        "entity-1": [
+            CommunityVoteNeighbor(
+                id="entity-2",
+                community_id="community-music",
+                embedding=[0.2, 0.3],
+            )
+        ]
+    }
+    assert communities == [
+        CommunityResult(
+            id="community-music",
+            name="音乐偏好",
+            summary="用户的音乐相关实体",
+            member_count=2,
+        )
+    ]
+    assert members == [
+        CommunityMemberResult(
+            entity_id="entity-1",
+            entity_name="周杰伦",
+            entity_type="生命体",
+            description="歌手",
+            community_id="community-music",
+            embedding=[0.1, 0.2],
+            importance=0.8,
+            mention_count=2,
+            access_count=1,
+        )
+    ]
+    assert relationships == [
+        CommunityRelationResult(
+            source_entity_id="entity-user",
+            source_name="用户",
+            target_entity_id="entity-1",
+            target_name="周杰伦",
+            name="偏好",
+            evidence="用户喜欢周杰伦。",
+        )
+    ]
+    for _, params in driver.executed:
+        if params:
+            assert params.get("user_id") == "user-a"
 
 
 class FakeNeo4jDriver:

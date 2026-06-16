@@ -2,7 +2,14 @@ from fastapi.testclient import TestClient
 
 from app.application.services.auth_service import AuthService
 from app.application.services.memory_service import MemoryService
-from app.domain.models.memory_graph import MemoryConsolidationStats, MemoryReflectStats
+from app.domain.models.memory_graph import (
+    CommunityMemberResult,
+    CommunityRelationResult,
+    CommunityResult,
+    MemoryCommunityClusterStats,
+    MemoryConsolidationStats,
+    MemoryReflectStats,
+)
 from app.domain.models.user import User
 from app.interfaces import service_dependencies
 from app.main import app
@@ -136,6 +143,91 @@ def test_reflect_memory_returns_stats_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_cluster_memory_returns_stats_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeCommunityMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.post(
+        "/api/memories/cluster",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "communities": 2,
+        "assigned_entities": 3,
+        "merged_communities": 1,
+        "enhanced_communities": 2,
+        "skipped": None,
+        "error": None,
+    }
+    app.dependency_overrides.clear()
+
+
+def test_list_and_detail_memory_communities_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeCommunityMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    list_response = client.get(
+        "/api/memories/communities",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    detail_response = client.get(
+        "/api/memories/communities/community-music",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json()["data"] == [
+        {
+            "id": "community-music",
+            "name": "音乐偏好",
+            "summary": "用户的音乐相关实体",
+            "member_count": 1,
+        }
+    ]
+    assert detail_response.status_code == 200
+    assert detail_response.json()["data"]["members"][0]["entity_name"] == "周杰伦"
+    assert detail_response.json()["data"]["relationships"][0]["name"] == "偏好"
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -198,3 +290,46 @@ class FakeConsolidateMemoryService:
 class FakeReflectMemoryService:
     async def reflect(self):
         return MemoryReflectStats(insights=2)
+
+
+class FakeCommunityMemoryService:
+    async def cluster(self):
+        return MemoryCommunityClusterStats(
+            communities=2,
+            assigned_entities=3,
+            merged_communities=1,
+            enhanced_communities=2,
+        )
+
+    async def list_communities(self):
+        return [
+            CommunityResult(
+                id="community-music",
+                name="音乐偏好",
+                summary="用户的音乐相关实体",
+                member_count=1,
+            )
+        ]
+
+    async def community_detail(self, community_id):
+        return (
+            [
+                CommunityMemberResult(
+                    entity_id="entity-1",
+                    entity_name="周杰伦",
+                    entity_type="生命体",
+                    description="歌手",
+                    community_id=community_id,
+                )
+            ],
+            [
+                CommunityRelationResult(
+                    source_entity_id="entity-user",
+                    source_name="用户",
+                    target_entity_id="entity-1",
+                    target_name="周杰伦",
+                    name="偏好",
+                    evidence="用户喜欢周杰伦。",
+                )
+            ],
+        )

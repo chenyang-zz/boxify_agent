@@ -68,6 +68,13 @@ async def run_extract_memory(
                 )
             except Exception as e:
                 logger.warning("长期记忆反思触发失败，已忽略: %s", e)
+            try:
+                await task_dispatcher.dispatch_cluster_memory(
+                    memory.user_id,
+                    stats.dialogue_id,
+                )
+            except Exception as e:
+                logger.warning("长期记忆社区聚类触发失败，已忽略: %s", e)
     except Exception as e:
         logger.error("长期记忆图谱萃取失败: %s", e, exc_info=True)
         async with uow_factory() as uow:

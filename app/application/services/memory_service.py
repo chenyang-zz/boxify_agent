@@ -7,10 +7,18 @@ from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource
 from app.domain.models.memory_graph import MemoryConsolidationStats, MemoryReflectStats
+from app.domain.models.memory_graph import (
+    CommunityMemberResult,
+    CommunityRelationResult,
+    CommunityResult,
+    MemoryCommunityClusterStats,
+)
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.memory import (
     LongTermMemoryManager,
+    MemoryCommunityClusterer,
+    MemoryCommunitySummarizer,
     MemoryConsolidator,
     MemoryInsightGenerator,
     MemoryProfileSummarizer,
@@ -41,6 +49,11 @@ class MemoryService:
         )
         self._insight_generator = (
             MemoryInsightGenerator(llm=llm, json_parser=json_parser)
+            if llm and json_parser
+            else None
+        )
+        self._community_summarizer = (
+            MemoryCommunitySummarizer(llm=llm, json_parser=json_parser)
             if llm and json_parser
             else None
         )
@@ -112,3 +125,34 @@ class MemoryService:
             embedding=self._embedding,
         )
         return await reflector.reflect()
+
+    async def cluster(self) -> MemoryCommunityClusterStats:
+        """手动执行当前用户记忆社区聚类。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法执行社区聚类")
+        clusterer = MemoryCommunityClusterer(
+            user_id=self._user_id,
+            graph_repository=self._graph_repository,
+            summarizer=self._community_summarizer,
+        )
+        return await clusterer.cluster()
+
+    async def list_communities(self) -> list[CommunityResult]:
+        """列出当前用户记忆社区。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询社区")
+        return await self._graph_repository.list_communities(self._user_id)
+
+    async def community_detail(
+        self, community_id: str
+    ) -> tuple[list[CommunityMemberResult], list[CommunityRelationResult]]:
+        """读取当前用户指定社区成员和社区内关系。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询社区")
+        members = await self._graph_repository.community_members(
+            self._user_id, community_id
+        )
+        relationships = await self._graph_repository.community_relationships(
+            self._user_id, community_id
+        )
+        return members, relationships

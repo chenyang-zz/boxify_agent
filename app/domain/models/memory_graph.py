@@ -65,6 +65,38 @@ class EntityNode(BaseModel):
     traits: list[str] = Field(default_factory=list)
 
 
+class CommunityNode(BaseModel):
+    """实体社区节点。"""
+
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    user_id: str
+    name: str
+    summary: str = ""
+    member_count: int = 0
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime | None = None
+
+
+class CommunityVoteEntity(BaseModel):
+    """社区聚类投票所需的轻量实体数据。"""
+
+    id: str
+    user_id: str
+    name: str
+    type: str
+    description: str = ""
+    embedding: list[float] = Field(default_factory=list)
+    community_id: str | None = None
+
+
+class CommunityVoteNeighbor(BaseModel):
+    """社区聚类投票所需的一跳邻居快照。"""
+
+    id: str
+    community_id: str | None = None
+    embedding: list[float] = Field(default_factory=list)
+
+
 class RelationEdge(BaseModel):
     """实体间语义关系。"""
 
@@ -145,6 +177,17 @@ class MemoryReflectStats(BaseModel):
     error: str | None = None
 
 
+class MemoryCommunityClusterStats(BaseModel):
+    """一次社区聚类任务的统计。"""
+
+    communities: int = 0
+    assigned_entities: int = 0
+    merged_communities: int = 0
+    enhanced_communities: int = 0
+    skipped: str | None = None
+    error: str | None = None
+
+
 class InsightNode(BaseModel):
     """反思产生的高层洞察节点。"""
 
@@ -170,6 +213,40 @@ class InsightResult(BaseModel):
     confidence: float = 0.7
     source_count: int = 0
     score: float = 0
+
+
+class CommunityResult(BaseModel):
+    """社区列表返回项。"""
+
+    id: str
+    name: str
+    summary: str = ""
+    member_count: int = 0
+
+
+class CommunityMemberResult(BaseModel):
+    """社区成员实体返回项。"""
+
+    entity_id: str
+    entity_name: str
+    entity_type: str
+    description: str = ""
+    community_id: str
+    embedding: list[float] = Field(default_factory=list)
+    importance: float = 0.5
+    mention_count: int = 0
+    access_count: int = 0
+
+
+class CommunityRelationResult(BaseModel):
+    """社区内部关系事实返回项。"""
+
+    source_entity_id: str
+    source_name: str
+    target_entity_id: str
+    target_name: str
+    name: str
+    evidence: str = ""
 
 
 class GraphRelationFact(BaseModel):

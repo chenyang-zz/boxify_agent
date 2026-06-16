@@ -5,6 +5,11 @@ from fastapi import APIRouter, Depends, Query
 from app.application.services.memory_service import MemoryService
 from app.interfaces.schemas.base import PageData, Response
 from app.interfaces.schemas.memory import (
+    MemoryClusterResponse,
+    MemoryCommunityDetailResponse,
+    MemoryCommunityMemberResponse,
+    MemoryCommunityRelationResponse,
+    MemoryCommunityResponse,
     MemoryConsolidateResponse,
     MemoryCreateRequest,
     MemoryReflectResponse,
@@ -102,6 +107,68 @@ async def reflect_memories(
     return Response.success(
         msg="记忆反思完成",
         data=MemoryReflectResponse.model_validate(stats.model_dump()),
+    )
+
+
+@router.post(
+    "/cluster",
+    response_model=Response[MemoryClusterResponse],
+    summary="手动聚类记忆社区",
+    description="对当前用户的记忆实体执行一次全量社区聚类。",
+)
+async def cluster_memories(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """手动聚类当前用户记忆社区。"""
+    stats = await memory_service.cluster()
+    return Response.success(
+        msg="记忆社区聚类完成",
+        data=MemoryClusterResponse.model_validate(stats.model_dump()),
+    )
+
+
+@router.get(
+    "/communities",
+    response_model=Response[list[MemoryCommunityResponse]],
+    summary="查询记忆社区",
+    description="查询当前用户的记忆实体社区列表。",
+)
+async def list_memory_communities(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆社区列表。"""
+    communities = await memory_service.list_communities()
+    return Response.success(
+        data=[
+            MemoryCommunityResponse.model_validate(community.model_dump())
+            for community in communities
+        ]
+    )
+
+
+@router.get(
+    "/communities/{community_id}",
+    response_model=Response[MemoryCommunityDetailResponse],
+    summary="查询记忆社区详情",
+    description="查询当前用户指定记忆社区的成员实体和社区内关系。",
+)
+async def get_memory_community(
+    community_id: str,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆社区详情。"""
+    members, relationships = await memory_service.community_detail(community_id)
+    return Response.success(
+        data=MemoryCommunityDetailResponse(
+            members=[
+                MemoryCommunityMemberResponse.model_validate(member.model_dump())
+                for member in members
+            ],
+            relationships=[
+                MemoryCommunityRelationResponse.model_validate(relation.model_dump())
+                for relation in relationships
+            ],
+        )
     )
 
 

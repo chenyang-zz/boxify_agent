@@ -38,6 +38,57 @@ class MemoryReflectResponse(BaseModel):
     error: str | None = None
 
 
+class MemoryClusterResponse(BaseModel):
+    """手动社区聚类统计响应。"""
+
+    communities: int = 0
+    assigned_entities: int = 0
+    merged_communities: int = 0
+    enhanced_communities: int = 0
+    skipped: str | None = None
+    error: str | None = None
+
+
+class MemoryCommunityResponse(BaseModel):
+    """记忆社区列表响应。"""
+
+    id: str
+    name: str
+    summary: str = ""
+    member_count: int = 0
+
+
+class MemoryCommunityMemberResponse(BaseModel):
+    """记忆社区成员响应。"""
+
+    entity_id: str
+    entity_name: str
+    entity_type: str
+    description: str = ""
+    community_id: str
+    importance: float = 0.5
+    mention_count: int = 0
+    access_count: int = 0
+
+
+class MemoryCommunityRelationResponse(BaseModel):
+    """记忆社区内部关系响应。"""
+
+    source_entity_id: str
+    source_name: str
+    target_entity_id: str
+    target_name: str
+    name: str
+    evidence: str = ""
+
+
+class MemoryCommunityDetailResponse(BaseModel):
+    """记忆社区详情响应。"""
+
+    members: list[MemoryCommunityMemberResponse]
+    relationships: list[MemoryCommunityRelationResponse]
+
+
 class MemoryGraphStatsResponse(BaseModel):
     """长期记忆图谱萃取统计响应。"""
 
