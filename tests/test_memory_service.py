@@ -13,6 +13,8 @@ from app.domain.models.memory_graph import (
     MemoryConsolidationStats,
     MemoryGraphResult,
     MemoryPromotionStats,
+    MemoryTimelineEventResult,
+    MemoryTimelineParticipantResult,
 )
 from app.domain.services.memory import LongTermMemoryManager, MemoryConsolidator
 from app.domain.services.memory.community_clusterer import MemoryCommunityClusterer
@@ -399,6 +401,36 @@ async def test_application_memory_service_clusters_and_lists_communities():
 
 
 @pytest.mark.anyio
+async def test_application_memory_service_lists_timeline_events():
+    repository = FakeTimelineGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    events = await service.timeline(limit=25)
+
+    assert repository.calls == [("user-a", 25)]
+    assert events == [
+        MemoryTimelineEventResult(
+            id="event-1",
+            title="参加周杰伦演唱会",
+            description="用户参加了周杰伦演唱会",
+            event_time="2026-06-15T20:00:00",
+            created_at="2026-06-16T09:00:00",
+            participants=[
+                MemoryTimelineParticipantResult(
+                    entity_id="entity-1",
+                    name="周杰伦",
+                    type="生命体",
+                )
+            ],
+        )
+    ]
+
+
+@pytest.mark.anyio
 async def test_memory_community_clusterer_is_available_for_service_layer():
     repository = FakeCommunityServiceGraphRepository()
     clusterer = MemoryCommunityClusterer(user_id="user-a", graph_repository=repository)
@@ -614,6 +646,31 @@ class FakeCommunityServiceGraphRepository(FakeGraphRepository):
 
     async def prune_empty_communities(self, user_id):
         return None
+
+
+class FakeTimelineGraphRepository(FakeGraphRepository):
+    def __init__(self):
+        super().__init__([])
+        self.calls = []
+
+    async def event_timeline(self, user_id, limit):
+        self.calls.append((user_id, limit))
+        return [
+            MemoryTimelineEventResult(
+                id="event-1",
+                title="参加周杰伦演唱会",
+                description="用户参加了周杰伦演唱会",
+                event_time="2026-06-15T20:00:00",
+                created_at="2026-06-16T09:00:00",
+                participants=[
+                    MemoryTimelineParticipantResult(
+                        entity_id="entity-1",
+                        name="周杰伦",
+                        type="生命体",
+                    )
+                ],
+            )
+        ]
 
 
 class FakeProfileSummarizer:

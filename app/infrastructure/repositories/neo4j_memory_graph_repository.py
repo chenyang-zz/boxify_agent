@@ -11,8 +11,10 @@ from app.domain.models.memory_graph import (
     GraphRelationFact,
     InsightResult,
     MemoryGraph,
-    MemoryPromotionStats,
     MemoryGraphResult,
+    MemoryPromotionStats,
+    MemoryTimelineEventResult,
+    MemoryTimelineParticipantResult,
     stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
@@ -53,6 +55,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 "FOR (e:Entity) REQUIRE (e.id, e.user_id) IS UNIQUE"
             ),
             (
+                "CREATE CONSTRAINT memory_event_id IF NOT EXISTS "
+                "FOR (e:Event) REQUIRE (e.id, e.user_id) IS UNIQUE"
+            ),
+            (
                 "CREATE CONSTRAINT memory_insight_id IF NOT EXISTS "
                 "FOR (i:Insight) REQUIRE (i.id, i.user_id) IS UNIQUE"
             ),
@@ -71,6 +77,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             (
                 "CREATE INDEX memory_entity_layer IF NOT EXISTS "
                 "FOR (e:Entity) ON (e.user_id, e.memory_layer)"
+            ),
+            (
+                "CREATE INDEX memory_event_user_time IF NOT EXISTS "
+                "FOR (e:Event) ON (e.user_id, e.event_time)"
             ),
             (
                 "CREATE INDEX memory_community_user IF NOT EXISTS "
@@ -429,6 +439,36 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             result = await session.run(cypher, user_id=user_id)
             rows = await result.data()
         return int((rows[0] if rows else {}).get("count") or 0)
+
+    async def event_timeline(
+        self, user_id: str, limit: int
+    ) -> list[MemoryTimelineEventResult]:
+        """读取当前用户事件时间线。"""
+        cypher = """
+        MATCH (event:Event {user_id: $user_id})
+        OPTIONAL MATCH (event)-[:INVOLVES {user_id: $user_id}]->
+            (entity:Entity {user_id: $user_id})
+        WITH event,
+             collect({
+                 entity_id: entity.id,
+                 name: entity.name,
+                 type: entity.type
+             }) AS raw_participants,
+             CASE WHEN event.event_time IS NULL THEN 0 ELSE 1 END AS event_has_time
+        RETURN event.id AS id,
+               event.title AS title,
+               event.description AS description,
+               event.event_time AS event_time,
+               event.created_at AS created_at,
+               [p IN raw_participants WHERE p.entity_id IS NOT NULL] AS participants
+        ORDER BY event_has_time DESC,
+                 coalesce(event.event_time, event.created_at) DESC
+        LIMIT $limit
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id, limit=limit)
+            rows = await result.data()
+        return [self._row_to_timeline_event(row) for row in rows]
 
     async def has_communities(self, user_id: str) -> bool:
         """判断当前用户是否已有社区。"""
@@ -895,6 +935,31 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             mentions=params["mentions"],
             relations=params["relations"],
         )
+        if params["events"]:
+            await tx.run(
+                """
+                UNWIND $events AS row
+                MERGE (event:Event {id: row.id, user_id: row.user_id})
+                SET event.title = row.title,
+                    event.description = row.description,
+                    event.event_time = row.event_time,
+                    event.created_at = coalesce(event.created_at, row.created_at)
+                """,
+                events=params["events"],
+                user_id=params["user_id"],
+            )
+        if params["involves"]:
+            await tx.run(
+                """
+                UNWIND $involves AS row
+                MATCH (event:Event {id: row.event_id, user_id: row.user_id})
+                MATCH (entity:Entity {id: row.entity_id, user_id: row.user_id})
+                MERGE (event)-[involves:INVOLVES {id: row.id, user_id: row.user_id}]->(entity)
+                SET involves.role = row.role
+                """,
+                involves=params["involves"],
+                user_id=params["user_id"],
+            )
 
     @staticmethod
     def _row_to_search_result(row: dict[str, Any]) -> MemoryGraphResult:
@@ -1014,4 +1079,24 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             confidence=float(row.get("confidence") or 0.7),
             source_count=int(row.get("source_count") or 0),
             score=float(row.get("score") or 0),
+        )
+
+    @staticmethod
+    def _row_to_timeline_event(row: dict[str, Any]) -> MemoryTimelineEventResult:
+        """把 Neo4j 事件行转换为时间线结果。"""
+        return MemoryTimelineEventResult(
+            id=str(row.get("id") or ""),
+            title=str(row.get("title") or ""),
+            description=str(row.get("description") or ""),
+            event_time=row.get("event_time"),
+            created_at=row.get("created_at"),
+            participants=[
+                MemoryTimelineParticipantResult(
+                    entity_id=str(participant.get("entity_id") or ""),
+                    name=str(participant.get("name") or ""),
+                    type=str(participant.get("type") or ""),
+                )
+                for participant in row.get("participants") or []
+                if participant.get("entity_id")
+            ],
         )

@@ -89,6 +89,25 @@ class MemoryCommunityDetailResponse(BaseModel):
     relationships: list[MemoryCommunityRelationResponse]
 
 
+class MemoryTimelineParticipantResponse(BaseModel):
+    """记忆事件参与实体响应。"""
+
+    entity_id: str
+    name: str
+    type: str
+
+
+class MemoryTimelineEventResponse(BaseModel):
+    """记忆事件时间线响应。"""
+
+    id: str
+    title: str
+    description: str = ""
+    event_time: datetime | None = None
+    created_at: datetime | None = None
+    participants: list[MemoryTimelineParticipantResponse]
+
+
 class MemoryGraphStatsResponse(BaseModel):
     """长期记忆图谱萃取统计响应。"""
 
@@ -97,6 +116,8 @@ class MemoryGraphStatsResponse(BaseModel):
     statements: int = 0
     entities: int = 0
     relations: int = 0
+    events: int = 0
+    involves: int = 0
 
 
 class MemoryResponse(BaseModel):

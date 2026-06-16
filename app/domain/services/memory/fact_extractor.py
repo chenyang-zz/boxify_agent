@@ -40,6 +40,17 @@ class ExtractedTriplet(BaseModel):
     confidence: float = 0.8
 
 
+class ExtractedEvent(BaseModel):
+    """LLM 萃取出的一次性经历事件。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = ""
+    description: str = ""
+    event_time: str | None = None
+    participants: list[str] = Field(default_factory=list)
+
+
 class ExtractedStatement(BaseModel):
     """LLM 萃取出的结构化原子陈述。"""
 
@@ -58,6 +69,7 @@ class ExtractedTriplets(BaseModel):
 
     entities: list[ExtractedEntity] = Field(default_factory=list)
     triplets: list[ExtractedTriplet] = Field(default_factory=list)
+    events: list[ExtractedEvent] = Field(default_factory=list)
 
 
 class _ExtractedStatements(BaseModel):
@@ -115,7 +127,9 @@ class MemoryFactExtractor:
         return statements
 
     async def extract_triplets(
-        self, statements: list[StatementNode]
+        self,
+        statements: list[StatementNode],
+        dialog_at: str | None = None,
     ) -> ExtractedTriplets:
         """从原子陈述中抽取实体和三元组。"""
         if not statements:
@@ -129,14 +143,15 @@ class MemoryFactExtractor:
                 {
                     "role": "user",
                     "content": EXTRACT_TRIPLETS_PROMPT.format(
-                        statements=[statement.text for statement in statements]
+                        statements=[statement.text for statement in statements],
+                        dialog_at=dialog_at or "NULL",
                     ),
                 },
             ],
             response_format={"type": "json_object"},
         )
         parsed = await self._parse_json(
-            response.get("content"), {"entities": [], "triplets": []}
+            response.get("content"), {"entities": [], "triplets": [], "events": []}
         )
         return ExtractedTriplets.model_validate(parsed)
 

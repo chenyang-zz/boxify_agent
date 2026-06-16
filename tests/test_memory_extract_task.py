@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from app.domain.models.long_term_memory import LongTermMemory, MemoryStatus
@@ -90,6 +92,44 @@ async def test_extract_memory_task_dispatches_cluster_after_success():
     )
 
     assert dispatcher.cluster_calls == [("user-a", "dialogue-1")]
+
+
+@pytest.mark.anyio
+async def test_extract_memory_task_passes_memory_created_at_as_dialog_at():
+    repository = InMemoryMemoryRepository()
+    created_at = datetime(2026, 6, 15, 20, 30)
+    memory = LongTermMemory(
+        user_id="user-a",
+        content="用户昨天参加了周杰伦演唱会。",
+        created_at=created_at,
+    )
+    await repository.save(memory)
+    pipeline = CapturingPipeline(
+        MemoryGraphStats(
+            dialogue_id="dialogue-1",
+            chunks=1,
+            statements=1,
+            entities=2,
+            relations=1,
+            events=1,
+            involves=2,
+        )
+    )
+
+    await run_extract_memory(
+        memory_id=memory.id,
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        pipeline_factory=lambda user_id: pipeline,
+    )
+
+    assert pipeline.calls == [
+        {
+            "memory_id": memory.id,
+            "user_id": "user-a",
+            "content": "用户昨天参加了周杰伦演唱会。",
+            "dialog_at": created_at,
+        }
+    ]
 
 
 @pytest.mark.anyio
@@ -238,12 +278,47 @@ class FakePipeline:
     def __init__(self, stats):
         self.stats = stats
 
-    async def extract_memory(self, memory_id: str, user_id: str, content: str):
+    async def extract_memory(
+        self,
+        memory_id: str,
+        user_id: str,
+        content: str,
+        dialog_at=None,
+    ):
+        return self.stats
+
+
+class CapturingPipeline:
+    def __init__(self, stats):
+        self.stats = stats
+        self.calls = []
+
+    async def extract_memory(
+        self,
+        memory_id: str,
+        user_id: str,
+        content: str,
+        dialog_at=None,
+    ):
+        self.calls.append(
+            {
+                "memory_id": memory_id,
+                "user_id": user_id,
+                "content": content,
+                "dialog_at": dialog_at,
+            }
+        )
         return self.stats
 
 
 class ExplodingPipeline:
-    async def extract_memory(self, memory_id: str, user_id: str, content: str):
+    async def extract_memory(
+        self,
+        memory_id: str,
+        user_id: str,
+        content: str,
+        dialog_at=None,
+    ):
         raise RuntimeError("boom")
 
 

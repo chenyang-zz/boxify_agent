@@ -1,8 +1,12 @@
+from datetime import datetime
+
 from app.domain.external.embedding import EmbeddingModel
 from app.domain.models.memory_graph import (
     ChunkNode,
     DialogueNode,
     EntityNode,
+    EventNode,
+    InvolvesEdge,
     MemoryGraph,
     MemoryGraphStats,
     MentionEdge,
@@ -35,18 +39,27 @@ class MemoryGraphExtractor:
         self._chunk_size = chunk_size
 
     async def extract_memory(
-        self, memory_id: str, user_id: str, content: str
+        self,
+        memory_id: str,
+        user_id: str,
+        content: str,
+        dialog_at: datetime | None = None,
     ) -> MemoryGraphStats:
         """萃取一条 PG 记忆并写入 Neo4j 图谱。"""
+        dialog_at = dialog_at or datetime.now()
         dialogue = DialogueNode(
             id=stable_memory_graph_id(user_id, memory_id, "dialogue"),
             user_id=user_id,
             memory_id=memory_id,
             summary=content.strip(),
+            created_at=dialog_at,
         )
         chunks = self._chunk_text(user_id, dialogue.id, content)
         statements = await self._fact_extractor.extract_statements(chunks)
-        triplets = await self._fact_extractor.extract_triplets(statements)
+        triplets = await self._fact_extractor.extract_triplets(
+            statements,
+            dialog_at=dialog_at.isoformat(),
+        )
         graph = await self._build_graph(dialogue, chunks, statements, triplets)
         await self._graph_repository.save_graph(graph)
         return graph.stats()
@@ -130,6 +143,11 @@ class MemoryGraphExtractor:
             )
 
         entities = list({entity.id: entity for entity in entity_by_idx.values()}.values())
+        events, involves = self._build_events(
+            dialogue=dialogue,
+            entities=entities,
+            triplet_result=triplet_result,
+        )
         if entities:
             vectors = await self._embedding.embed(
                 [
@@ -147,7 +165,78 @@ class MemoryGraphExtractor:
             entities=entities,
             mentions=list(mentions_by_key.values()),
             relations=relations,
+            events=events,
+            involves=involves,
         )
+
+    def _build_events(
+        self,
+        dialogue: DialogueNode,
+        entities: list[EntityNode],
+        triplet_result: ExtractedTriplets,
+    ) -> tuple[list[EventNode], list[InvolvesEdge]]:
+        """把 LLM 事件输出转换为 Event 节点和 INVOLVES 边。"""
+        entity_by_name = {
+            entity.name.strip(): entity
+            for entity in entities
+            if entity.name.strip()
+        }
+        events: list[EventNode] = []
+        involves: list[InvolvesEdge] = []
+        for extracted in triplet_result.events:
+            title = extracted.title.strip()
+            if not title:
+                continue
+            event_time = self._parse_event_time(extracted.event_time)
+            event = EventNode(
+                id=stable_memory_graph_id(
+                    dialogue.user_id,
+                    dialogue.id,
+                    "event",
+                    title,
+                    event_time.isoformat() if event_time else "",
+                    extracted.description.strip(),
+                ),
+                user_id=dialogue.user_id,
+                title=title,
+                description=extracted.description.strip(),
+                event_time=event_time,
+                created_at=dialogue.created_at,
+            )
+            linked_entity_ids: set[str] = set()
+            for participant in extracted.participants:
+                entity = entity_by_name.get(participant.strip())
+                if not entity or entity.id in linked_entity_ids:
+                    continue
+                linked_entity_ids.add(entity.id)
+                involves.append(
+                    InvolvesEdge(
+                        id=stable_memory_graph_id(
+                            dialogue.user_id,
+                            event.id,
+                            entity.id,
+                            "involves",
+                        ),
+                        user_id=dialogue.user_id,
+                        event_id=event.id,
+                        entity_id=entity.id,
+                    )
+                )
+            events.append(event)
+        return events, involves
+
+    @staticmethod
+    def _parse_event_time(value: str | None) -> datetime | None:
+        """解析 LLM 输出的事件时间，无法解析时返回空。"""
+        if not value:
+            return None
+        normalized = value.strip()
+        if not normalized or normalized.upper() == "NULL":
+            return None
+        try:
+            return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        except ValueError:
+            return None
 
     async def _build_entities(
         self, user_id: str, extracted_entities: list[ExtractedEntity]

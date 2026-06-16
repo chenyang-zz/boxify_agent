@@ -9,6 +9,8 @@ from app.domain.models.memory_graph import (
     MemoryCommunityClusterStats,
     MemoryConsolidationStats,
     MemoryReflectStats,
+    MemoryTimelineEventResult,
+    MemoryTimelineParticipantResult,
 )
 from app.domain.models.user import User
 from app.interfaces import service_dependencies
@@ -228,6 +230,53 @@ def test_list_and_detail_memory_communities_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_list_memory_timeline_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeTimelineMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.get(
+        "/api/memories/timeline?limit=50",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == [
+        {
+            "id": "event-1",
+            "title": "参加周杰伦演唱会",
+            "description": "用户参加了周杰伦演唱会",
+            "event_time": "2026-06-15T20:00:00",
+            "created_at": "2026-06-16T09:00:00",
+            "participants": [
+                {
+                    "entity_id": "entity-1",
+                    "name": "周杰伦",
+                    "type": "生命体",
+                }
+            ],
+        }
+    ]
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -333,3 +382,24 @@ class FakeCommunityMemoryService:
                 )
             ],
         )
+
+
+class FakeTimelineMemoryService:
+    async def timeline(self, limit):
+        assert limit == 50
+        return [
+            MemoryTimelineEventResult(
+                id="event-1",
+                title="参加周杰伦演唱会",
+                description="用户参加了周杰伦演唱会",
+                event_time="2026-06-15T20:00:00",
+                created_at="2026-06-16T09:00:00",
+                participants=[
+                    MemoryTimelineParticipantResult(
+                        entity_id="entity-1",
+                        name="周杰伦",
+                        type="生命体",
+                    )
+                ],
+            )
+        ]

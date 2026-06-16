@@ -8,9 +8,13 @@ from app.domain.models.memory_graph import (
     CommunityVoteNeighbor,
     DialogueNode,
     EntityNode,
+    EventNode,
     InsightResult,
+    InvolvesEdge,
     MemoryGraph,
     MemoryPromotionStats,
+    MemoryTimelineEventResult,
+    MemoryTimelineParticipantResult,
     RelationEdge,
     StatementNode,
 )
@@ -68,6 +72,22 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
                 evidence="用户喜欢周杰伦。",
             )
         ],
+        events=[
+            EventNode(
+                id="event-1",
+                user_id="user-a",
+                title="参加周杰伦演唱会",
+                description="用户参加了周杰伦演唱会",
+            )
+        ],
+        involves=[
+            InvolvesEdge(
+                id="involves-1",
+                user_id="user-a",
+                event_id="event-1",
+                entity_id="entity-1",
+            )
+        ],
     )
 
     await repository.ensure_schema()
@@ -75,14 +95,24 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
 
     executed_queries = "\n".join(query for query, _ in driver.executed)
     assert "CREATE CONSTRAINT memory_dialogue_id" in executed_queries
+    assert "CREATE CONSTRAINT memory_event_id" in executed_queries
+    assert "CREATE INDEX memory_event_user_time" in executed_queries
     assert "CREATE VECTOR INDEX memory_entity_embedding" in executed_queries
     assert "MERGE (d:Dialogue {id: $dialogue_id, user_id: $user_id})" in executed_queries
     assert "MERGE (entity:Entity {id: row.id, user_id: row.user_id})" in executed_queries
     assert "MERGE (source)-[rel:RELATION {id: row.id, user_id: row.user_id}]->(target)" in executed_queries
-    save_params = driver.executed[-1][1]
+    assert "MERGE (event:Event {id: row.id, user_id: row.user_id})" in executed_queries
+    assert "MERGE (event)-[involves:INVOLVES {id: row.id, user_id: row.user_id}]->(entity)" in executed_queries
+    save_params = next(params for _, params in driver.executed if "entities" in params)
+    event_params = next(params for _, params in driver.executed if "events" in params)
+    involves_params = next(
+        params for _, params in driver.executed if "involves" in params
+    )
     assert save_params["user_id"] == "user-a"
     assert save_params["entities"][0]["user_id"] == "user-a"
     assert save_params["relations"][0]["user_id"] == "user-a"
+    assert event_params["events"][0]["user_id"] == "user-a"
+    assert involves_params["involves"][0]["user_id"] == "user-a"
 
 
 def test_memory_graph_nodes_have_dynamic_defaults():
@@ -554,6 +584,68 @@ async def test_neo4j_repository_manages_community_schema_assignment_and_queries(
     for _, params in driver.executed:
         if params:
             assert params.get("user_id") == "user-a"
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_event_timeline_by_user():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "MATCH (event:Event {user_id: $user_id})": [
+                {
+                    "id": "event-1",
+                    "title": "参加周杰伦演唱会",
+                    "description": "用户参加了周杰伦演唱会",
+                    "event_time": "2026-06-15T20:00:00",
+                    "created_at": "2026-06-16T09:00:00",
+                    "participants": [
+                        {
+                            "entity_id": "entity-user",
+                            "name": "用户",
+                            "type": "生命体",
+                        },
+                        {
+                            "entity_id": "entity-1",
+                            "name": "周杰伦",
+                            "type": "生命体",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    events = await repository.event_timeline("user-a", limit=50)
+
+    assert events == [
+        MemoryTimelineEventResult(
+            id="event-1",
+            title="参加周杰伦演唱会",
+            description="用户参加了周杰伦演唱会",
+            event_time="2026-06-15T20:00:00",
+            created_at="2026-06-16T09:00:00",
+            participants=[
+                MemoryTimelineParticipantResult(
+                    entity_id="entity-user",
+                    name="用户",
+                    type="生命体",
+                ),
+                MemoryTimelineParticipantResult(
+                    entity_id="entity-1",
+                    name="周杰伦",
+                    type="生命体",
+                ),
+            ],
+        )
+    ]
+    query, params = driver.executed[-1]
+    assert "MATCH (event:Event {user_id: $user_id})" in query
+    assert "ORDER BY event_has_time DESC" in query
+    assert params == {"user_id": "user-a", "limit": 50}
 
 
 class FakeNeo4jDriver:

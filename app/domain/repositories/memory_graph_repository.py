@@ -11,6 +11,7 @@ from app.domain.models.memory_graph import (
     MemoryGraph,
     MemoryGraphResult,
     MemoryPromotionStats,
+    MemoryTimelineEventResult,
 )
 
 
@@ -172,4 +173,10 @@ class MemoryGraphRepository(Protocol):
 
     async def prune_empty_communities(self, user_id: str) -> None:
         """清理当前用户空社区。"""
+        ...
+
+    async def event_timeline(
+        self, user_id: str, limit: int
+    ) -> list[MemoryTimelineEventResult]:
+        """返回当前用户事件时间线。"""
         ...

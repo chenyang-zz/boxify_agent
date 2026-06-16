@@ -12,6 +12,7 @@ from app.interfaces.schemas.memory import (
     MemoryCommunityResponse,
     MemoryConsolidateResponse,
     MemoryCreateRequest,
+    MemoryTimelineEventResponse,
     MemoryReflectResponse,
     MemoryResponse,
     MemorySearchRequest,
@@ -169,6 +170,26 @@ async def get_memory_community(
                 for relation in relationships
             ],
         )
+    )
+
+
+@router.get(
+    "/timeline",
+    response_model=Response[list[MemoryTimelineEventResponse]],
+    summary="查询记忆事件时间线",
+    description="查询当前用户从长期记忆图谱中萃取出的一次性经历事件。",
+)
+async def list_memory_timeline(
+    limit: int = Query(default=50, ge=1, le=200),
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆事件时间线。"""
+    events = await memory_service.timeline(limit)
+    return Response.success(
+        data=[
+            MemoryTimelineEventResponse.model_validate(event.model_dump())
+            for event in events
+        ]
     )
 
 

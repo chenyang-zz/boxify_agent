@@ -11,7 +11,10 @@ from app.infrastructure.external.json_parser.repair_json_parser import RepairJSO
 
 def test_memory_graph_prompts_format_required_placeholders():
     statements_prompt = EXTRACT_STATEMENTS_PROMPT.format(text="用户喜欢周杰伦。")
-    triplets_prompt = EXTRACT_TRIPLETS_PROMPT.format(statements=["用户喜欢周杰伦。"])
+    triplets_prompt = EXTRACT_TRIPLETS_PROMPT.format(
+        statements=["用户喜欢周杰伦。"],
+        dialog_at="2026-06-16T09:00:00",
+    )
 
     assert "用户喜欢周杰伦。" in statements_prompt
     assert "用户喜欢周杰伦。" in triplets_prompt
@@ -21,6 +24,9 @@ def test_memory_graph_prompts_format_required_placeholders():
     assert "has_unsolved_reference" in statements_prompt
     assert "entities" in triplets_prompt
     assert "subject_id" in triplets_prompt
+    assert '"events"' in triplets_prompt
+    assert "一次性、过去发生" in triplets_prompt
+    assert "稳定画像/偏好/关系不落 Event" in triplets_prompt
     assert "生命体" in triplets_prompt
     assert "偏好" in triplets_prompt
 
@@ -106,6 +112,14 @@ async def test_memory_fact_extractor_extracts_triplets():
                             "evidence": "用户喜欢周杰伦。",
                         }
                     ],
+                    "events": [
+                        {
+                            "title": "参加周杰伦演唱会",
+                            "description": "用户昨天参加了周杰伦演唱会",
+                            "event_time": "2026-06-15T20:00:00",
+                            "participants": ["用户", "周杰伦"],
+                        }
+                    ],
                 }
             ]
         ),
@@ -128,6 +142,8 @@ async def test_memory_fact_extractor_extracts_triplets():
     assert triplets.triplets[0].subject_id == 1
     assert triplets.triplets[0].predicate == "偏好"
     assert triplets.triplets[0].object_id == 2
+    assert triplets.events[0].title == "参加周杰伦演唱会"
+    assert triplets.events[0].participants == ["用户", "周杰伦"]
 
 
 @pytest.mark.anyio
@@ -163,6 +179,7 @@ async def test_memory_fact_extractor_uses_safe_empty_defaults_for_bad_json():
     assert statements == []
     assert triplets.entities == []
     assert triplets.triplets == []
+    assert triplets.events == []
 
 
 class FakeLLM:

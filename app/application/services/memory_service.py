@@ -12,6 +12,7 @@ from app.domain.models.memory_graph import (
     CommunityRelationResult,
     CommunityResult,
     MemoryCommunityClusterStats,
+    MemoryTimelineEventResult,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.repositories.vow import IUnitOfWork
@@ -156,3 +157,10 @@ class MemoryService:
             self._user_id, community_id
         )
         return members, relationships
+
+    async def timeline(self, limit: int = 50) -> list[MemoryTimelineEventResult]:
+        """读取当前用户记忆事件时间线。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询事件时间线")
+        limit = max(1, min(limit, 200))
+        return await self._graph_repository.event_timeline(self._user_id, limit)

@@ -65,6 +65,17 @@ class EntityNode(BaseModel):
     traits: list[str] = Field(default_factory=list)
 
 
+class EventNode(BaseModel):
+    """一次性发生的用户经历事件。"""
+
+    id: str
+    user_id: str
+    title: str
+    description: str = ""
+    event_time: datetime | None = None
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
 class CommunityNode(BaseModel):
     """实体社区节点。"""
 
@@ -123,6 +134,16 @@ class MentionEdge(BaseModel):
     entity_id: str
 
 
+class InvolvesEdge(BaseModel):
+    """事件涉及实体的语义边。"""
+
+    id: str
+    user_id: str
+    event_id: str
+    entity_id: str
+    role: str = ""
+
+
 class MemoryGraph(BaseModel):
     """单条长期记忆萃取出的四层溯源图谱。"""
 
@@ -132,6 +153,8 @@ class MemoryGraph(BaseModel):
     entities: list[EntityNode] = Field(default_factory=list)
     mentions: list[MentionEdge] = Field(default_factory=list)
     relations: list[RelationEdge] = Field(default_factory=list)
+    events: list[EventNode] = Field(default_factory=list)
+    involves: list[InvolvesEdge] = Field(default_factory=list)
 
     def stats(self) -> "MemoryGraphStats":
         """返回任务状态可直接持久化的图谱统计。"""
@@ -141,6 +164,8 @@ class MemoryGraph(BaseModel):
             statements=len(self.statements),
             entities=len(self.entities),
             relations=len(self.relations),
+            events=len(self.events),
+            involves=len(self.involves),
         )
 
 
@@ -152,6 +177,8 @@ class MemoryGraphStats(BaseModel):
     statements: int = 0
     entities: int = 0
     relations: int = 0
+    events: int = 0
+    involves: int = 0
 
 
 class MemoryPromotionStats(BaseModel):
@@ -247,6 +274,25 @@ class CommunityRelationResult(BaseModel):
     target_name: str
     name: str
     evidence: str = ""
+
+
+class MemoryTimelineParticipantResult(BaseModel):
+    """时间线事件参与实体。"""
+
+    entity_id: str
+    name: str
+    type: str
+
+
+class MemoryTimelineEventResult(BaseModel):
+    """用户记忆事件时间线项。"""
+
+    id: str
+    title: str
+    description: str = ""
+    event_time: datetime | None = None
+    created_at: datetime | None = None
+    participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
 
 
 class GraphRelationFact(BaseModel):

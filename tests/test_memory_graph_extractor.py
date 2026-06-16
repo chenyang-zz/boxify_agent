@@ -3,6 +3,7 @@ import pytest
 from app.domain.models.memory_graph import EntityNode, MemoryGraphStats, StatementNode
 from app.domain.services.memory.fact_extractor import (
     ExtractedEntity,
+    ExtractedEvent,
     ExtractedTriplet,
     ExtractedTriplets,
 )
@@ -77,6 +78,20 @@ async def test_memory_graph_extractor_writes_four_layer_graph_with_deduped_entit
                     evidence="用户喜欢周杰伦。",
                 ),
             ],
+            events=[
+                ExtractedEvent(
+                    title="参加周杰伦演唱会",
+                    description="用户昨天参加了周杰伦演唱会",
+                    event_time="2026-06-15T20:00:00",
+                    participants=["用户", "周杰伦", "不存在的实体"],
+                ),
+                ExtractedEvent(
+                    title="",
+                    description="空标题事件应跳过",
+                    event_time="NULL",
+                    participants=["用户"],
+                ),
+            ],
         ),
     )
     repository = FakeGraphRepository()
@@ -112,12 +127,21 @@ async def test_memory_graph_extractor_writes_four_layer_graph_with_deduped_entit
         ("关联于", "用户喜欢周杰伦。"),
     ]
     assert graph.relations[0].source_entity_id == graph.relations[1].source_entity_id
+    assert len(graph.events) == 1
+    assert graph.events[0].title == "参加周杰伦演唱会"
+    assert graph.events[0].event_time.isoformat() == "2026-06-15T20:00:00"
+    assert {(edge.event_id, edge.entity_id) for edge in graph.involves} == {
+        (graph.events[0].id, graph.relations[0].source_entity_id),
+        (graph.events[0].id, graph.relations[1].target_entity_id),
+    }
     assert stats == MemoryGraphStats(
         dialogue_id=graph.dialogue.id,
         chunks=1,
         statements=2,
         entities=3,
         relations=2,
+        events=1,
+        involves=2,
     )
 
 
@@ -214,6 +238,80 @@ async def test_memory_graph_extractor_reuses_existing_same_name_entity_by_type()
     assert graph.mentions[0].entity_id == "existing-user-entity"
 
 
+@pytest.mark.anyio
+async def test_memory_graph_extractor_redirects_event_participants_to_existing_entities():
+    fact_extractor = FakeFactExtractor(
+        statements=[
+            StatementNode(
+                id="statement-1",
+                user_id="user-a",
+                chunk_id="chunk-1",
+                index=0,
+                text="用户昨天参加了周杰伦演唱会。",
+            )
+        ],
+        triplets=ExtractedTriplets(
+            entities=[
+                ExtractedEntity(
+                    entity_idx=1,
+                    name="用户",
+                    type="生命体",
+                    description="当前用户",
+                ),
+                ExtractedEntity(
+                    entity_idx=2,
+                    name="周杰伦",
+                    type="生命体",
+                    description="歌手",
+                ),
+            ],
+            triplets=[
+                ExtractedTriplet(
+                    subject_id=1,
+                    predicate="关联于",
+                    object_id=2,
+                    evidence="用户昨天参加了周杰伦演唱会。",
+                )
+            ],
+            events=[
+                ExtractedEvent(
+                    title="参加周杰伦演唱会",
+                    description="用户昨天参加了周杰伦演唱会",
+                    event_time="NULL",
+                    participants=["用户", "周杰伦"],
+                )
+            ],
+        ),
+    )
+    repository = FakeGraphRepository()
+    repository.existing_by_type = {
+        "生命体": [
+            EntityNode(
+                id="existing-user-entity",
+                user_id="user-a",
+                name="用户",
+                type="生命体",
+                description="历史用户节点",
+            )
+        ]
+    }
+    extractor = MemoryGraphExtractor(
+        fact_extractor=fact_extractor,
+        embedding=FakeEmbedding(),
+        graph_repository=repository,
+    )
+
+    stats = await extractor.extract_memory(
+        memory_id="mem-3",
+        user_id="user-a",
+        content="用户昨天参加了周杰伦演唱会。",
+    )
+
+    graph = repository.saved_graphs[0]
+    assert stats.events == 1
+    assert "existing-user-entity" in {edge.entity_id for edge in graph.involves}
+
+
 class FakeFactExtractor:
     def __init__(
         self, statements: list[StatementNode], triplets: ExtractedTriplets
@@ -226,7 +324,7 @@ class FakeFactExtractor:
         self.chunk_texts.append([chunk.text for chunk in chunks])
         return self._statements
 
-    async def extract_triplets(self, statements):
+    async def extract_triplets(self, statements, dialog_at=None):
         return self._triplets
 
 

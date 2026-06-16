@@ -48,6 +48,7 @@ async def run_extract_memory(
             memory_id=memory.id,
             user_id=memory.user_id,
             content=memory.content,
+            dialog_at=memory.created_at,
         )
         async with uow_factory() as uow:
             latest = await uow.memory.get_by_user(memory.user_id, memory.id)
