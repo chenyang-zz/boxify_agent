@@ -14,6 +14,9 @@ from app.interfaces.schemas.memory import (
     MemoryCreateRequest,
     MemoryEntitySubgraphResponse,
     MemoryGraphViewResponse,
+    MemoryInsightResponse,
+    MemoryMergeDuplicatesResponse,
+    MemoryProfileResponse,
     MemoryReflectResponse,
     MemoryResponse,
     MemorySearchRequest,
@@ -205,6 +208,88 @@ async def get_memory_entity_subgraph(
     subgraph = await memory_service.entity_subgraph(entity_id)
     return Response.success(
         data=MemoryEntitySubgraphResponse.model_validate(subgraph.model_dump())
+    )
+
+
+@router.get(
+    "/profile",
+    response_model=Response[MemoryProfileResponse],
+    summary="查询记忆画像",
+    description="查询当前用户长期记忆图谱中的实体画像分组。",
+)
+async def get_memory_profile(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆画像。"""
+    profile = await memory_service.profile()
+    return Response.success(
+        data=MemoryProfileResponse.model_validate(profile.model_dump())
+    )
+
+
+@router.get(
+    "/insights",
+    response_model=Response[list[MemoryInsightResponse]],
+    summary="查询记忆洞察",
+    description="查询当前用户长期记忆反思生成的高层洞察。",
+)
+async def list_memory_insights(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆洞察。"""
+    insights = await memory_service.list_insights()
+    return Response.success(
+        data=[
+            MemoryInsightResponse.model_validate(insight.model_dump())
+            for insight in insights
+        ]
+    )
+
+
+@router.post(
+    "/insights/{insight_id}/delete",
+    response_model=Response[Dict],
+    summary="删除记忆洞察",
+    description="删除当前用户指定长期记忆洞察。",
+)
+async def delete_memory_insight(
+    insight_id: str,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """删除当前用户指定记忆洞察。"""
+    await memory_service.delete_insight(insight_id)
+    return Response.success(msg="删除成功")
+
+
+@router.post(
+    "/entities/{entity_id}/delete",
+    response_model=Response[Dict],
+    summary="删除记忆实体",
+    description="删除当前用户指定长期记忆实体及其图谱关系。",
+)
+async def delete_memory_entity(
+    entity_id: str,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """删除当前用户指定记忆实体。"""
+    await memory_service.delete_entity(entity_id)
+    return Response.success(msg="删除成功")
+
+
+@router.post(
+    "/merge-duplicates",
+    response_model=Response[MemoryMergeDuplicatesResponse],
+    summary="合并重复记忆实体",
+    description="合并当前用户历史同名同类型重复实体。",
+)
+async def merge_duplicate_memory_entities(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """合并当前用户历史重复实体。"""
+    stats = await memory_service.merge_duplicates()
+    return Response.success(
+        msg="重复实体合并完成",
+        data=MemoryMergeDuplicatesResponse.model_validate(stats.model_dump()),
     )
 
 

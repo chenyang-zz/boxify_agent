@@ -7,12 +7,18 @@ from app.domain.models.memory_graph import (
     CommunityMemberResult,
     CommunityRelationResult,
     CommunityResult,
+    InsightResult,
     MemoryCommunityClusterStats,
     MemoryConsolidationStats,
     MemoryEntitySubgraphResult,
     MemoryGraphEdgeResult,
     MemoryGraphNodeResult,
     MemoryGraphViewResult,
+    MemoryMergeDuplicatesResult,
+    MemoryProfileEntityResult,
+    MemoryProfileGroupResult,
+    MemoryProfileRelationResult,
+    MemoryProfileResult,
     MemoryReflectStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -412,6 +418,95 @@ def test_get_memory_entity_subgraph_returns_404_for_missing_entity(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_memory_management_endpoints_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeManagementMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    profile_response = client.get("/api/memories/profile", headers=headers)
+    insights_response = client.get("/api/memories/insights", headers=headers)
+    merge_response = client.post("/api/memories/merge-duplicates", headers=headers)
+    entity_delete_response = client.post(
+        "/api/memories/entities/entity-1/delete", headers=headers
+    )
+    insight_delete_response = client.post(
+        "/api/memories/insights/insight-1/delete", headers=headers
+    )
+    missing_entity_response = client.post(
+        "/api/memories/entities/missing/delete", headers=headers
+    )
+    missing_insight_response = client.post(
+        "/api/memories/insights/missing/delete", headers=headers
+    )
+
+    assert profile_response.status_code == 200
+    assert profile_response.json()["data"] == {
+        "total": 1,
+        "type_counts": {"生命体": 1},
+        "groups": [
+            {
+                "type": "生命体",
+                "entities": [
+                    {
+                        "id": "entity-1",
+                        "name": "周杰伦",
+                        "type": "生命体",
+                        "description": "歌手",
+                        "community_id": "community-music",
+                        "importance": 0.8,
+                        "memory_layer": "long_term",
+                        "access_count": 2,
+                        "mention_count": 3,
+                        "core_facts": ["用户长期喜欢周杰伦"],
+                        "traits": ["偏好华语流行"],
+                        "relations": [
+                            {
+                                "predicate": "偏好",
+                                "target_entity_id": "entity-1",
+                                "target_name": "周杰伦",
+                                "target_type": "生命体",
+                                "evidence": "用户喜欢周杰伦。",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    assert insights_response.status_code == 200
+    assert insights_response.json()["data"][0]["theme"] == "音乐偏好"
+    assert merge_response.status_code == 200
+    assert merge_response.json()["data"] == {
+        "removed_entities": 2,
+        "merged_groups": 1,
+    }
+    assert entity_delete_response.status_code == 200
+    assert insight_delete_response.status_code == 200
+    assert missing_entity_response.status_code == 404
+    assert missing_entity_response.json()["msg"] == "实体不存在或无权访问"
+    assert missing_insight_response.status_code == 404
+    assert missing_insight_response.json()["msg"] == "洞察不存在或无权访问"
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -589,3 +684,63 @@ class FakeGraphMemoryService:
             nodes=self.nodes,
             edges=self.edges,
         )
+
+
+class FakeManagementMemoryService:
+    async def profile(self):
+        return MemoryProfileResult(
+            total=1,
+            type_counts={"生命体": 1},
+            groups=[
+                MemoryProfileGroupResult(
+                    type="生命体",
+                    entities=[
+                        MemoryProfileEntityResult(
+                            id="entity-1",
+                            name="周杰伦",
+                            type="生命体",
+                            description="歌手",
+                            community_id="community-music",
+                            importance=0.8,
+                            memory_layer="long_term",
+                            access_count=2,
+                            mention_count=3,
+                            core_facts=["用户长期喜欢周杰伦"],
+                            traits=["偏好华语流行"],
+                            relations=[
+                                MemoryProfileRelationResult(
+                                    predicate="偏好",
+                                    target_entity_id="entity-1",
+                                    target_name="周杰伦",
+                                    target_type="生命体",
+                                    evidence="用户喜欢周杰伦。",
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+
+    async def list_insights(self):
+        return [
+            InsightResult(
+                id="insight-1",
+                theme="音乐偏好",
+                content="用户偏好华语流行音乐。",
+                importance=0.8,
+                confidence=0.9,
+                source_count=2,
+            )
+        ]
+
+    async def merge_duplicates(self):
+        return MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
+
+    async def delete_entity(self, entity_id):
+        if entity_id == "missing":
+            raise NotFoundError("实体不存在或无权访问")
+
+    async def delete_insight(self, insight_id):
+        if insight_id == "missing":
+            raise NotFoundError("洞察不存在或无权访问")

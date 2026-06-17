@@ -49,6 +49,13 @@ class MemoryClusterResponse(BaseModel):
     error: str | None = None
 
 
+class MemoryMergeDuplicatesResponse(BaseModel):
+    """历史重复实体合并统计响应。"""
+
+    removed_entities: int = 0
+    merged_groups: int = 0
+
+
 class MemoryCommunityResponse(BaseModel):
     """记忆社区列表响应。"""
 
@@ -147,6 +154,61 @@ class MemoryEntitySubgraphResponse(BaseModel):
     center: str
     nodes: list[MemoryGraphNodeResponse]
     edges: list[MemoryGraphEdgeResponse]
+
+
+class MemoryProfileRelationResponse(BaseModel):
+    """记忆画像实体关系响应。"""
+
+    predicate: str
+    target_entity_id: str | None = None
+    target_name: str | None = None
+    target_type: str | None = None
+    evidence: str = ""
+
+
+class MemoryProfileEntityResponse(BaseModel):
+    """记忆画像实体响应。"""
+
+    id: str
+    name: str
+    type: str
+    description: str = ""
+    community_id: str | None = None
+    importance: float = 0.5
+    memory_layer: str = "short_term"
+    access_count: int = 0
+    mention_count: int = 0
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
+    relations: list[MemoryProfileRelationResponse] = Field(default_factory=list)
+
+
+class MemoryProfileGroupResponse(BaseModel):
+    """记忆画像实体分组响应。"""
+
+    type: str
+    entities: list[MemoryProfileEntityResponse]
+
+
+class MemoryProfileResponse(BaseModel):
+    """记忆画像响应。"""
+
+    total: int = 0
+    type_counts: dict[str, int] = Field(default_factory=dict)
+    groups: list[MemoryProfileGroupResponse] = Field(default_factory=list)
+
+
+class MemoryInsightResponse(BaseModel):
+    """记忆洞察响应。"""
+
+    id: str
+    theme: str
+    content: str
+    importance: float = 0.6
+    confidence: float = 0.7
+    source_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class MemoryGraphStatsResponse(BaseModel):

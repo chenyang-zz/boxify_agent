@@ -215,6 +215,13 @@ class MemoryCommunityClusterStats(BaseModel):
     error: str | None = None
 
 
+class MemoryMergeDuplicatesResult(BaseModel):
+    """历史重复实体合并统计。"""
+
+    removed_entities: int = 0
+    merged_groups: int = 0
+
+
 class InsightNode(BaseModel):
     """反思产生的高层洞察节点。"""
 
@@ -240,6 +247,8 @@ class InsightResult(BaseModel):
     confidence: float = 0.7
     source_count: int = 0
     score: float = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class CommunityResult(BaseModel):
@@ -334,6 +343,48 @@ class MemoryEntitySubgraphResult(BaseModel):
     center: str
     nodes: list[MemoryGraphNodeResult] = Field(default_factory=list)
     edges: list[MemoryGraphEdgeResult] = Field(default_factory=list)
+
+
+class MemoryProfileRelationResult(BaseModel):
+    """用户画像实体的一跳出边关系事实。"""
+
+    predicate: str
+    target_entity_id: str | None = None
+    target_name: str | None = None
+    target_type: str | None = None
+    evidence: str = ""
+
+
+class MemoryProfileEntityResult(BaseModel):
+    """用户画像实体。"""
+
+    id: str
+    name: str
+    type: str
+    description: str = ""
+    community_id: str | None = None
+    importance: float = 0.5
+    memory_layer: str = "short_term"
+    access_count: int = 0
+    mention_count: int = 0
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
+    relations: list[MemoryProfileRelationResult] = Field(default_factory=list)
+
+
+class MemoryProfileGroupResult(BaseModel):
+    """按类型聚合的一组画像实体。"""
+
+    type: str
+    entities: list[MemoryProfileEntityResult] = Field(default_factory=list)
+
+
+class MemoryProfileResult(BaseModel):
+    """当前用户记忆画像视图。"""
+
+    total: int = 0
+    type_counts: dict[str, int] = Field(default_factory=dict)
+    groups: list[MemoryProfileGroupResult] = Field(default_factory=list)
 
 
 class GraphRelationFact(BaseModel):

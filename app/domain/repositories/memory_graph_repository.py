@@ -13,6 +13,8 @@ from app.domain.models.memory_graph import (
     MemoryGraphEdgeResult,
     MemoryGraphNodeResult,
     MemoryGraphResult,
+    MemoryMergeDuplicatesResult,
+    MemoryProfileEntityResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
 )
@@ -116,6 +118,10 @@ class MemoryGraphRepository(Protocol):
         """统计当前用户洞察数量。"""
         ...
 
+    async def delete_insight(self, user_id: str, insight_id: str) -> bool:
+        """删除当前用户单条洞察。"""
+        ...
+
     async def has_communities(self, user_id: str) -> bool:
         """判断当前用户是否已有社区。"""
         ...
@@ -190,6 +196,26 @@ class MemoryGraphRepository(Protocol):
         self, user_id: str, entity_id: str
     ) -> MemoryEntitySubgraphResult:
         """读取当前用户单实体一跳子图。"""
+        ...
+
+    async def profile_entities(
+        self, user_id: str
+    ) -> list[MemoryProfileEntityResult]:
+        """读取当前用户画像实体及一跳出边事实。"""
+        ...
+
+    async def entity_type_counts(self, user_id: str) -> dict[str, int]:
+        """统计当前用户各实体类型数量。"""
+        ...
+
+    async def delete_entity(self, user_id: str, entity_id: str) -> bool:
+        """删除当前用户单个实体。"""
+        ...
+
+    async def merge_duplicate_entities(
+        self, user_id: str
+    ) -> MemoryMergeDuplicatesResult:
+        """合并当前用户历史同名同类型重复实体。"""
         ...
 
     async def event_timeline(

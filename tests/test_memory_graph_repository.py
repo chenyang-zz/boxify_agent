@@ -15,6 +15,9 @@ from app.domain.models.memory_graph import (
     MemoryGraph,
     MemoryGraphEdgeResult,
     MemoryGraphNodeResult,
+    MemoryMergeDuplicatesResult,
+    MemoryProfileEntityResult,
+    MemoryProfileRelationResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -773,6 +776,125 @@ async def test_neo4j_repository_returns_entity_subgraph_by_user():
     assert "INVOLVES" not in edge_query
     assert node_params == {"user_id": "user-a", "entity_id": "entity-1"}
     assert edge_params == {"user_id": "user-a", "entity_id": "entity-1"}
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_profile_and_deletes_entities_insights_by_user():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "OPTIONAL MATCH (entity)-[relation:RELATION": [
+                {
+                    "id": "entity-1",
+                    "name": "周杰伦",
+                    "type": "生命体",
+                    "description": "歌手",
+                    "community_id": "community-music",
+                    "importance": 0.8,
+                    "memory_layer": "long_term",
+                    "access_count": 2,
+                    "mention_count": 3,
+                    "core_facts": ["用户长期喜欢周杰伦"],
+                    "traits": ["偏好华语流行"],
+                    "relations": [
+                        {
+                            "predicate": "偏好",
+                            "target_entity_id": "entity-1",
+                            "target_name": "周杰伦",
+                            "target_type": "生命体",
+                            "evidence": "用户喜欢周杰伦。",
+                        }
+                    ],
+                }
+            ],
+            "RETURN entity.type AS type": [{"type": "生命体", "count": 1}],
+            "DETACH DELETE entity": [{"deleted": 1}],
+            "DETACH DELETE insight": [{"deleted": 1}],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    profile_entities = await repository.profile_entities("user-a")
+    type_counts = await repository.entity_type_counts("user-a")
+    entity_deleted = await repository.delete_entity("user-a", "entity-1")
+    insight_deleted = await repository.delete_insight("user-a", "insight-1")
+
+    assert profile_entities == [
+        MemoryProfileEntityResult(
+            id="entity-1",
+            name="周杰伦",
+            type="生命体",
+            description="歌手",
+            community_id="community-music",
+            importance=0.8,
+            memory_layer="long_term",
+            access_count=2,
+            mention_count=3,
+            core_facts=["用户长期喜欢周杰伦"],
+            traits=["偏好华语流行"],
+            relations=[
+                MemoryProfileRelationResult(
+                    predicate="偏好",
+                    target_entity_id="entity-1",
+                    target_name="周杰伦",
+                    target_type="生命体",
+                    evidence="用户喜欢周杰伦。",
+                )
+            ],
+        )
+    ]
+    assert type_counts == {"生命体": 1}
+    assert entity_deleted is True
+    assert insight_deleted is True
+    for query, params in driver.executed:
+        assert params["user_id"] == "user-a"
+        if "DETACH DELETE entity" in query:
+            assert "MATCH (entity:Entity {id: $entity_id, user_id: $user_id})" in query
+        if "DETACH DELETE insight" in query:
+            assert "MATCH (insight:Insight {id: $insight_id, user_id: $user_id})" in query
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_merges_duplicate_entities_in_single_transaction():
+    driver = FakeNeo4jDriver(
+        result_rows=[
+            {
+                "ids": ["entity-1", "entity-dup"],
+                "names": ["用户", "用户"],
+                "descriptions": ["当前用户", "当前用户重复节点"],
+                "core_facts": [["用户喜欢周杰伦"], ["用户喜欢音乐"]],
+                "traits": [["偏好华语流行"], ["偏好演唱会"]],
+                "access_count": 5,
+                "mention_count": 4,
+            }
+        ]
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    stats = await repository.merge_duplicate_entities("user-a")
+
+    assert stats == MemoryMergeDuplicatesResult(
+        removed_entities=1,
+        merged_groups=1,
+    )
+    executed_queries = "\n".join(query for query, _ in driver.executed)
+    assert "toLower(entity.name) AS normalized_name" in executed_queries
+    assert "MERGE (statement)-[:MENTIONS" in executed_queries
+    assert "MERGE (event)-[involves:INVOLVES" in executed_queries
+    assert "MERGE (keeper)-[new_relation:RELATION" in executed_queries
+    assert "MERGE (source)-[new_relation:RELATION" in executed_queries
+    assert "target.id <> $keeper_id" in executed_queries
+    assert "source.id <> $keeper_id" in executed_queries
+    assert "DETACH DELETE duplicate" in executed_queries
+    for _, params in driver.executed:
+        assert params["user_id"] == "user-a"
 
 
 class FakeNeo4jDriver:

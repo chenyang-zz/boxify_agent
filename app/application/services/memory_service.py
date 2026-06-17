@@ -11,9 +11,13 @@ from app.domain.models.memory_graph import (
     CommunityMemberResult,
     CommunityRelationResult,
     CommunityResult,
+    InsightResult,
     MemoryEntitySubgraphResult,
     MemoryCommunityClusterStats,
     MemoryGraphViewResult,
+    MemoryMergeDuplicatesResult,
+    MemoryProfileGroupResult,
+    MemoryProfileResult,
     MemoryTimelineEventResult,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
@@ -190,3 +194,47 @@ class MemoryService:
         if not any(node.id == entity_id for node in subgraph.nodes):
             raise NotFoundError("实体不存在或无权访问")
         return subgraph
+
+    async def profile(self) -> MemoryProfileResult:
+        """读取当前用户记忆画像。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询画像")
+        entities = await self._graph_repository.profile_entities(self._user_id)
+        type_counts = await self._graph_repository.entity_type_counts(self._user_id)
+        grouped: dict[str, list] = {}
+        for entity in entities:
+            grouped.setdefault(entity.type, []).append(entity)
+        return MemoryProfileResult(
+            total=len(entities),
+            type_counts=type_counts,
+            groups=[
+                MemoryProfileGroupResult(type=entity_type, entities=items)
+                for entity_type, items in grouped.items()
+            ],
+        )
+
+    async def list_insights(self) -> list[InsightResult]:
+        """列出当前用户长期记忆洞察。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询洞察")
+        return await self._graph_repository.list_insights(self._user_id)
+
+    async def delete_insight(self, insight_id: str) -> None:
+        """删除当前用户单条洞察。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法删除洞察")
+        if not await self._graph_repository.delete_insight(self._user_id, insight_id):
+            raise NotFoundError("洞察不存在或无权访问")
+
+    async def delete_entity(self, entity_id: str) -> None:
+        """删除当前用户单个图谱实体。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法删除实体")
+        if not await self._graph_repository.delete_entity(self._user_id, entity_id):
+            raise NotFoundError("实体不存在或无权访问")
+
+    async def merge_duplicates(self) -> MemoryMergeDuplicatesResult:
+        """合并当前用户历史同名同类型重复实体。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法合并重复实体")
+        return await self._graph_repository.merge_duplicate_entities(self._user_id)

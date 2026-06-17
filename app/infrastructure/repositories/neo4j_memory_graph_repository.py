@@ -15,6 +15,9 @@ from app.domain.models.memory_graph import (
     MemoryGraphEdgeResult,
     MemoryGraphNodeResult,
     MemoryGraphResult,
+    MemoryMergeDuplicatesResult,
+    MemoryProfileEntityResult,
+    MemoryProfileRelationResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -443,6 +446,25 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             rows = await result.data()
         return int((rows[0] if rows else {}).get("count") or 0)
 
+    async def delete_insight(self, user_id: str, insight_id: str) -> bool:
+        """删除当前用户单条洞察，返回是否删除成功。"""
+        cypher = """
+        OPTIONAL MATCH (insight:Insight {id: $insight_id, user_id: $user_id})
+        WITH insight, CASE WHEN insight IS NULL THEN 0 ELSE 1 END AS deleted
+        FOREACH (_ IN CASE WHEN insight IS NULL THEN [] ELSE [1] END |
+            DETACH DELETE insight
+        )
+        RETURN deleted
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                insight_id=insight_id,
+            )
+            rows = await result.data()
+        return int((rows[0] if rows else {}).get("deleted") or 0) > 0
+
     async def event_timeline(
         self, user_id: str, limit: int
     ) -> list[MemoryTimelineEventResult]:
@@ -814,6 +836,86 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             edges=[self._row_to_graph_edge(row) for row in edge_rows],
         )
 
+    async def profile_entities(
+        self, user_id: str
+    ) -> list[MemoryProfileEntityResult]:
+        """读取当前用户画像实体及一跳出边事实。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        OPTIONAL MATCH (entity)-[relation:RELATION {user_id: $user_id}]->
+            (target:Entity {user_id: $user_id})
+        WITH entity,
+             collect(DISTINCT {
+                 predicate: relation.name,
+                 target_entity_id: target.id,
+                 target_name: target.name,
+                 target_type: target.type,
+                 evidence: relation.evidence
+             }) AS raw_relations
+        RETURN entity.id AS id,
+               entity.name AS name,
+               entity.type AS type,
+               entity.description AS description,
+               entity.community_id AS community_id,
+               coalesce(entity.importance, 0.5) AS importance,
+               coalesce(entity.memory_layer, 'short_term') AS memory_layer,
+               coalesce(entity.access_count, 0) AS access_count,
+               coalesce(entity.mention_count, 0) AS mention_count,
+               coalesce(entity.core_facts, []) AS core_facts,
+               coalesce(entity.traits, []) AS traits,
+               [rel IN raw_relations WHERE rel.predicate IS NOT NULL] AS relations
+        ORDER BY entity.type ASC,
+                 coalesce(entity.importance, 0.5) DESC,
+                 entity.name ASC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return [self._row_to_profile_entity(row) for row in rows]
+
+    async def entity_type_counts(self, user_id: str) -> dict[str, int]:
+        """统计当前用户各实体类型数量。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        RETURN entity.type AS type,
+               count(entity) AS count
+        ORDER BY count DESC,
+                 type ASC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return {
+            str(row.get("type") or "其他"): int(row.get("count") or 0)
+            for row in rows
+        }
+
+    async def delete_entity(self, user_id: str, entity_id: str) -> bool:
+        """删除当前用户单个实体，返回是否删除成功。"""
+        cypher = """
+        OPTIONAL MATCH (entity:Entity {id: $entity_id, user_id: $user_id})
+        WITH entity, CASE WHEN entity IS NULL THEN 0 ELSE 1 END AS deleted
+        FOREACH (_ IN CASE WHEN entity IS NULL THEN [] ELSE [1] END |
+            DETACH DELETE entity
+        )
+        RETURN deleted
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+            )
+            rows = await result.data()
+        return int((rows[0] if rows else {}).get("deleted") or 0) > 0
+
+    async def merge_duplicate_entities(
+        self, user_id: str
+    ) -> MemoryMergeDuplicatesResult:
+        """合并当前用户历史同名同类型重复实体。"""
+        async with self._driver.session(database=self._database) as session:
+            return await session.execute_write(self._merge_duplicate_entities, user_id)
+
     async def _search_fulltext(
         self, user_id: str, query: str, top_k: int
     ) -> list[dict[str, Any]]:
@@ -944,6 +1046,217 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         if high - low < 1e-9:
             return {key: 1.0 for key in scores}
         return {key: (value - low) / (high - low) for key, value in scores.items()}
+
+    @staticmethod
+    async def _merge_duplicate_entities(tx, user_id: str) -> MemoryMergeDuplicatesResult:
+        """在单事务中合并同名同类型重复实体。"""
+        group_result = await tx.run(
+            """
+            MATCH (entity:Entity {user_id: $user_id})
+            WITH entity,
+                 toLower(entity.name) AS normalized_name,
+                 entity.type AS entity_type
+            ORDER BY
+                 CASE WHEN coalesce(entity.memory_layer, 'short_term') = 'long_term'
+                      THEN 0 ELSE 1 END,
+                 coalesce(entity.created_at, datetime()) ASC,
+                 coalesce(entity.mention_count, 0) DESC,
+                 coalesce(entity.access_count, 0) DESC
+            WITH normalized_name,
+                 entity_type,
+                 collect(entity) AS entities
+            WHERE normalized_name <> '' AND size(entities) > 1
+            RETURN [entity IN entities | entity.id] AS ids,
+                   [entity IN entities | entity.name] AS names,
+                   [entity IN entities | entity.description] AS descriptions,
+                   [entity IN entities | coalesce(entity.core_facts, [])] AS core_facts,
+                   [entity IN entities | coalesce(entity.traits, [])] AS traits,
+                   reduce(total = 0, entity IN entities |
+                       total + coalesce(entity.access_count, 0)
+                   ) AS access_count,
+                   reduce(total = 0, entity IN entities |
+                       total + coalesce(entity.mention_count, 0)
+                   ) AS mention_count,
+                   any(entity IN entities
+                       WHERE coalesce(entity.memory_layer, 'short_term') = 'long_term'
+                   ) AS has_long_term
+            """,
+            user_id=user_id,
+        )
+        groups = await group_result.data()
+        removed_entities = 0
+        merged_groups = 0
+        for group in groups:
+            ids = [str(entity_id) for entity_id in group.get("ids") or [] if entity_id]
+            if len(ids) < 2:
+                continue
+            keeper_id = ids[0]
+            duplicate_ids = ids[1:]
+            description = max(
+                [str(item) for item in group.get("descriptions") or [] if item],
+                key=len,
+                default="",
+            )
+            core_facts = Neo4jMemoryGraphRepository._flatten_unique(
+                group.get("core_facts") or []
+            )
+            traits = Neo4jMemoryGraphRepository._flatten_unique(
+                group.get("traits") or []
+            )
+            await tx.run(
+                """
+                MATCH (keeper:Entity {id: $keeper_id, user_id: $user_id})
+                MATCH (statement:Statement {user_id: $user_id})
+                    -[mention:MENTIONS]->(duplicate:Entity {user_id: $user_id})
+                WHERE duplicate.id IN $duplicate_ids
+                MERGE (statement)-[:MENTIONS {
+                    id: coalesce(mention.id, statement.id + ':' + $keeper_id),
+                    user_id: $user_id
+                }]->(keeper)
+                """,
+                user_id=user_id,
+                keeper_id=keeper_id,
+                duplicate_ids=duplicate_ids,
+            )
+            await tx.run(
+                """
+                MATCH (keeper:Entity {id: $keeper_id, user_id: $user_id})
+                MATCH (event:Event {user_id: $user_id})
+                    -[old_involves:INVOLVES]->(duplicate:Entity {user_id: $user_id})
+                WHERE duplicate.id IN $duplicate_ids
+                MERGE (event)-[involves:INVOLVES {
+                    id: coalesce(old_involves.id, event.id + ':' + $keeper_id),
+                    user_id: $user_id
+                }]->(keeper)
+                SET involves.role = coalesce(old_involves.role, involves.role, '')
+                """,
+                user_id=user_id,
+                keeper_id=keeper_id,
+                duplicate_ids=duplicate_ids,
+            )
+            await tx.run(
+                """
+                MATCH (keeper:Entity {id: $keeper_id, user_id: $user_id})
+                MATCH (duplicate:Entity {user_id: $user_id})
+                    -[relation:RELATION {user_id: $user_id}]->
+                    (target:Entity {user_id: $user_id})
+                WHERE duplicate.id IN $duplicate_ids
+                  AND target.id <> $keeper_id
+                MERGE (keeper)-[new_relation:RELATION {
+                    id: relation.id,
+                    user_id: $user_id
+                }]->(target)
+                SET new_relation.name = relation.name,
+                    new_relation.evidence = relation.evidence,
+                    new_relation.statement_id = relation.statement_id,
+                    new_relation.importance = coalesce(relation.importance, 0.5),
+                    new_relation.confidence = coalesce(relation.confidence, 0.8),
+                    new_relation.access_count = coalesce(relation.access_count, 0),
+                    new_relation.last_access_at = relation.last_access_at,
+                    new_relation.memory_layer = coalesce(
+                        relation.memory_layer, 'short_term'
+                    )
+                """,
+                user_id=user_id,
+                keeper_id=keeper_id,
+                duplicate_ids=duplicate_ids,
+            )
+            await tx.run(
+                """
+                MATCH (keeper:Entity {id: $keeper_id, user_id: $user_id})
+                MATCH (source:Entity {user_id: $user_id})
+                    -[relation:RELATION {user_id: $user_id}]->
+                    (duplicate:Entity {user_id: $user_id})
+                WHERE duplicate.id IN $duplicate_ids
+                  AND source.id <> $keeper_id
+                MERGE (source)-[new_relation:RELATION {
+                    id: relation.id,
+                    user_id: $user_id
+                }]->(keeper)
+                SET new_relation.name = relation.name,
+                    new_relation.evidence = relation.evidence,
+                    new_relation.statement_id = relation.statement_id,
+                    new_relation.importance = coalesce(relation.importance, 0.5),
+                    new_relation.confidence = coalesce(relation.confidence, 0.8),
+                    new_relation.access_count = coalesce(relation.access_count, 0),
+                    new_relation.last_access_at = relation.last_access_at,
+                    new_relation.memory_layer = coalesce(
+                        relation.memory_layer, 'short_term'
+                    )
+                """,
+                user_id=user_id,
+                keeper_id=keeper_id,
+                duplicate_ids=duplicate_ids,
+            )
+            await tx.run(
+                """
+                MATCH (keeper:Entity {id: $keeper_id, user_id: $user_id})
+                MATCH (duplicate:Entity {user_id: $user_id})
+                    -[:IN_COMMUNITY {user_id: $user_id}]->
+                    (community:Community {user_id: $user_id})
+                WHERE duplicate.id IN $duplicate_ids
+                SET keeper.community_id = coalesce(keeper.community_id, community.id)
+                MERGE (keeper)-[:IN_COMMUNITY {user_id: $user_id}]->(community)
+                """,
+                user_id=user_id,
+                keeper_id=keeper_id,
+                duplicate_ids=duplicate_ids,
+            )
+            await tx.run(
+                """
+                MATCH (keeper:Entity {id: $keeper_id, user_id: $user_id})
+                SET keeper.description = CASE
+                        WHEN size($description) > size(coalesce(keeper.description, ''))
+                        THEN $description
+                        ELSE keeper.description
+                    END,
+                    keeper.core_facts = $core_facts,
+                    keeper.traits = $traits,
+                    keeper.access_count = $access_count,
+                    keeper.mention_count = $mention_count,
+                    keeper.memory_layer = CASE
+                        WHEN $has_long_term THEN 'long_term'
+                        ELSE coalesce(keeper.memory_layer, 'short_term')
+                    END
+                """,
+                user_id=user_id,
+                keeper_id=keeper_id,
+                description=description,
+                core_facts=core_facts,
+                traits=traits,
+                access_count=int(group.get("access_count") or 0),
+                mention_count=int(group.get("mention_count") or 0),
+                has_long_term=bool(group.get("has_long_term")),
+            )
+            await tx.run(
+                """
+                MATCH (duplicate:Entity {user_id: $user_id})
+                WHERE duplicate.id IN $duplicate_ids
+                DETACH DELETE duplicate
+                """,
+                user_id=user_id,
+                duplicate_ids=duplicate_ids,
+            )
+            removed_entities += len(duplicate_ids)
+            merged_groups += 1
+        return MemoryMergeDuplicatesResult(
+            removed_entities=removed_entities,
+            merged_groups=merged_groups,
+        )
+
+    @staticmethod
+    def _flatten_unique(values: list) -> list[str]:
+        """把 Neo4j 聚合出的 list[list[str]] 去重展平。"""
+        unique: list[str] = []
+        seen: set[str] = set()
+        for item in values:
+            nested = item if isinstance(item, list) else [item]
+            for value in nested:
+                text = str(value or "").strip()
+                if text and text not in seen:
+                    seen.add(text)
+                    unique.append(text)
+        return unique
 
     @staticmethod
     async def _merge_graph(tx, params: dict[str, Any]) -> None:
@@ -1185,6 +1498,34 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
+    def _row_to_profile_entity(row: dict[str, Any]) -> MemoryProfileEntityResult:
+        """把 Neo4j 行转换为画像实体。"""
+        return MemoryProfileEntityResult(
+            id=str(row.get("id") or ""),
+            name=str(row.get("name") or ""),
+            type=str(row.get("type") or ""),
+            description=str(row.get("description") or ""),
+            community_id=row.get("community_id"),
+            importance=float(row.get("importance") or 0.5),
+            memory_layer=str(row.get("memory_layer") or "short_term"),
+            access_count=int(row.get("access_count") or 0),
+            mention_count=int(row.get("mention_count") or 0),
+            core_facts=row.get("core_facts") or [],
+            traits=row.get("traits") or [],
+            relations=[
+                MemoryProfileRelationResult(
+                    predicate=str(relation.get("predicate") or ""),
+                    target_entity_id=relation.get("target_entity_id"),
+                    target_name=relation.get("target_name"),
+                    target_type=relation.get("target_type"),
+                    evidence=str(relation.get("evidence") or ""),
+                )
+                for relation in row.get("relations") or []
+                if relation.get("predicate")
+            ],
+        )
+
+    @staticmethod
     def _row_to_entity_node(row: dict[str, Any], user_id: str) -> EntityNode:
         """把 Neo4j 实体行转换为领域实体节点模型。"""
         return EntityNode(
@@ -1214,6 +1555,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             confidence=float(row.get("confidence") or 0.7),
             source_count=int(row.get("source_count") or 0),
             score=float(row.get("score") or 0),
+            created_at=row.get("created_at"),
+            updated_at=row.get("updated_at"),
         )
 
     @staticmethod

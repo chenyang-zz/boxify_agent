@@ -10,12 +10,18 @@ from app.domain.models.memory_graph import (
     CommunityVoteEntity,
     EntityNode,
     GraphRelationFact,
+    InsightResult,
     MemoryConsolidationStats,
     MemoryEntitySubgraphResult,
     MemoryGraphEdgeResult,
     MemoryGraphNodeResult,
     MemoryGraphResult,
     MemoryGraphViewResult,
+    MemoryMergeDuplicatesResult,
+    MemoryProfileEntityResult,
+    MemoryProfileGroupResult,
+    MemoryProfileRelationResult,
+    MemoryProfileResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -479,6 +485,109 @@ async def test_application_memory_service_entity_subgraph_requires_visible_cente
 
 
 @pytest.mark.anyio
+async def test_application_memory_service_returns_profile_and_insights():
+    repository = FakeMemoryManagementGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    profile = await service.profile()
+    insights = await service.list_insights()
+
+    assert profile == MemoryProfileResult(
+        total=1,
+        type_counts={"生命体": 1},
+        groups=[
+            MemoryProfileGroupResult(
+                type="生命体",
+                entities=[
+                    MemoryProfileEntityResult(
+                        id="entity-1",
+                        name="周杰伦",
+                        type="生命体",
+                        description="歌手",
+                        community_id="community-music",
+                        importance=0.8,
+                        memory_layer="long_term",
+                        access_count=2,
+                        mention_count=3,
+                        core_facts=["用户长期喜欢周杰伦"],
+                        traits=["偏好华语流行"],
+                        relations=[
+                            MemoryProfileRelationResult(
+                                predicate="偏好",
+                                target_entity_id="entity-1",
+                                target_name="周杰伦",
+                                target_type="生命体",
+                                evidence="用户喜欢周杰伦。",
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+    assert insights == [
+        InsightResult(
+            id="insight-1",
+            theme="音乐偏好",
+            content="用户偏好华语流行音乐。",
+            importance=0.8,
+            confidence=0.9,
+            source_count=2,
+        )
+    ]
+    assert repository.calls == [
+        ("profile_entities", "user-a"),
+        ("entity_type_counts", "user-a"),
+        ("list_insights", "user-a"),
+    ]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_deletes_entity_and_insight_or_raises_not_found():
+    repository = FakeMemoryManagementGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    await service.delete_entity("entity-1")
+    await service.delete_insight("insight-1")
+
+    assert repository.calls == [
+        ("delete_entity", "user-a", "entity-1"),
+        ("delete_insight", "user-a", "insight-1"),
+    ]
+
+    with pytest.raises(NotFoundError) as entity_exc:
+        await service.delete_entity("missing")
+    with pytest.raises(NotFoundError) as insight_exc:
+        await service.delete_insight("missing")
+
+    assert entity_exc.value.msg == "实体不存在或无权访问"
+    assert insight_exc.value.msg == "洞察不存在或无权访问"
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_merges_duplicate_entities():
+    repository = FakeMemoryManagementGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    stats = await service.merge_duplicates()
+
+    assert stats == MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
+    assert repository.calls == [("merge_duplicate_entities", "user-a")]
+
+
+@pytest.mark.anyio
 async def test_memory_community_clusterer_is_available_for_service_layer():
     repository = FakeCommunityServiceGraphRepository()
     clusterer = MemoryCommunityClusterer(user_id="user-a", graph_repository=repository)
@@ -776,6 +885,68 @@ class FakeGraphViewRepository(FakeGraphRepository):
     async def list_communities(self, user_id):
         self.calls.append(("list_communities", user_id))
         return self.communities
+
+
+class FakeMemoryManagementGraphRepository(FakeGraphRepository):
+    def __init__(self):
+        super().__init__([])
+        self.calls = []
+
+    async def profile_entities(self, user_id):
+        self.calls.append(("profile_entities", user_id))
+        return [
+            MemoryProfileEntityResult(
+                id="entity-1",
+                name="周杰伦",
+                type="生命体",
+                description="歌手",
+                community_id="community-music",
+                importance=0.8,
+                memory_layer="long_term",
+                access_count=2,
+                mention_count=3,
+                core_facts=["用户长期喜欢周杰伦"],
+                traits=["偏好华语流行"],
+                relations=[
+                    MemoryProfileRelationResult(
+                        predicate="偏好",
+                        target_entity_id="entity-1",
+                        target_name="周杰伦",
+                        target_type="生命体",
+                        evidence="用户喜欢周杰伦。",
+                    )
+                ],
+            )
+        ]
+
+    async def entity_type_counts(self, user_id):
+        self.calls.append(("entity_type_counts", user_id))
+        return {"生命体": 1}
+
+    async def list_insights(self, user_id):
+        self.calls.append(("list_insights", user_id))
+        return [
+            InsightResult(
+                id="insight-1",
+                theme="音乐偏好",
+                content="用户偏好华语流行音乐。",
+                importance=0.8,
+                confidence=0.9,
+                source_count=2,
+            )
+        ]
+
+    async def delete_entity(self, user_id, entity_id):
+        self.calls.append(("delete_entity", user_id, entity_id))
+        return entity_id != "missing"
+
+    async def delete_insight(self, user_id, insight_id):
+        self.calls.append(("delete_insight", user_id, insight_id))
+        return insight_id != "missing"
+
+    async def merge_duplicate_entities(self, user_id):
+        self.calls.append(("merge_duplicate_entities", user_id))
+        return MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
 
 
 class FakeProfileSummarizer:
