@@ -8,7 +8,10 @@ from app.domain.models.memory_graph import (
     CommunityVoteNeighbor,
     EntityNode,
     InsightResult,
+    MemoryEntitySubgraphResult,
     MemoryGraph,
+    MemoryGraphEdgeResult,
+    MemoryGraphNodeResult,
     MemoryGraphResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
@@ -173,6 +176,20 @@ class MemoryGraphRepository(Protocol):
 
     async def prune_empty_communities(self, user_id: str) -> None:
         """清理当前用户空社区。"""
+        ...
+
+    async def graph_nodes(self, user_id: str) -> list[MemoryGraphNodeResult]:
+        """读取当前用户完整实体关系图节点。"""
+        ...
+
+    async def graph_edges(self, user_id: str) -> list[MemoryGraphEdgeResult]:
+        """读取当前用户完整实体关系图边。"""
+        ...
+
+    async def entity_subgraph(
+        self, user_id: str, entity_id: str
+    ) -> MemoryEntitySubgraphResult:
+        """读取当前用户单实体一跳子图。"""
         ...
 
     async def event_timeline(

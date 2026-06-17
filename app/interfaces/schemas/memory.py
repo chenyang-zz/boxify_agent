@@ -108,6 +108,47 @@ class MemoryTimelineEventResponse(BaseModel):
     participants: list[MemoryTimelineParticipantResponse]
 
 
+class MemoryGraphNodeResponse(BaseModel):
+    """记忆图谱可视化实体节点响应。"""
+
+    id: str
+    name: str
+    type: str
+    description: str = ""
+    community_id: str | None = None
+    importance: float = 0.5
+    memory_layer: str = "short_term"
+    access_count: int = 0
+    mention_count: int = 0
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
+
+
+class MemoryGraphEdgeResponse(BaseModel):
+    """记忆图谱可视化关系边响应。"""
+
+    source: str
+    target: str
+    predicate: str
+    evidence: str = ""
+
+
+class MemoryGraphViewResponse(BaseModel):
+    """记忆图谱可视化全图响应。"""
+
+    nodes: list[MemoryGraphNodeResponse]
+    edges: list[MemoryGraphEdgeResponse]
+    communities: list[MemoryCommunityResponse]
+
+
+class MemoryEntitySubgraphResponse(BaseModel):
+    """记忆图谱可视化单实体一跳子图响应。"""
+
+    center: str
+    nodes: list[MemoryGraphNodeResponse]
+    edges: list[MemoryGraphEdgeResponse]
+
+
 class MemoryGraphStatsResponse(BaseModel):
     """长期记忆图谱萃取统计响应。"""
 

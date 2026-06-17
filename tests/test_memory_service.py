@@ -11,7 +11,11 @@ from app.domain.models.memory_graph import (
     EntityNode,
     GraphRelationFact,
     MemoryConsolidationStats,
+    MemoryEntitySubgraphResult,
+    MemoryGraphEdgeResult,
+    MemoryGraphNodeResult,
     MemoryGraphResult,
+    MemoryGraphViewResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -431,6 +435,50 @@ async def test_application_memory_service_lists_timeline_events():
 
 
 @pytest.mark.anyio
+async def test_application_memory_service_returns_graph_view():
+    repository = FakeGraphViewRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    graph = await service.graph()
+
+    assert graph == MemoryGraphViewResult(
+        nodes=repository.nodes,
+        edges=repository.edges,
+        communities=repository.communities,
+    )
+    assert repository.calls == [
+        ("graph_nodes", "user-a"),
+        ("graph_edges", "user-a"),
+        ("list_communities", "user-a"),
+    ]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_entity_subgraph_requires_visible_center():
+    repository = FakeGraphViewRepository(
+        subgraph=MemoryEntitySubgraphResult(
+            center="missing",
+            nodes=[],
+            edges=[],
+        )
+    )
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    with pytest.raises(NotFoundError) as exc:
+        await service.entity_subgraph("missing")
+
+    assert exc.value.msg == "实体不存在或无权访问"
+
+
+@pytest.mark.anyio
 async def test_memory_community_clusterer_is_available_for_service_layer():
     repository = FakeCommunityServiceGraphRepository()
     clusterer = MemoryCommunityClusterer(user_id="user-a", graph_repository=repository)
@@ -671,6 +719,63 @@ class FakeTimelineGraphRepository(FakeGraphRepository):
                 ],
             )
         ]
+
+
+class FakeGraphViewRepository(FakeGraphRepository):
+    def __init__(self, subgraph=None):
+        super().__init__([])
+        self.nodes = [
+            MemoryGraphNodeResult(
+                id="entity-1",
+                name="周杰伦",
+                type="生命体",
+                description="歌手",
+                community_id="community-music",
+                importance=0.8,
+                memory_layer="long_term",
+                access_count=2,
+                mention_count=3,
+                core_facts=["用户长期喜欢周杰伦"],
+                traits=["偏好华语流行"],
+            )
+        ]
+        self.edges = [
+            MemoryGraphEdgeResult(
+                source="entity-user",
+                target="entity-1",
+                predicate="偏好",
+                evidence="用户喜欢周杰伦。",
+            )
+        ]
+        self.communities = [
+            CommunityResult(
+                id="community-music",
+                name="音乐偏好",
+                summary="用户的音乐相关实体",
+                member_count=1,
+            )
+        ]
+        self.subgraph = subgraph or MemoryEntitySubgraphResult(
+            center="entity-1",
+            nodes=self.nodes,
+            edges=self.edges,
+        )
+
+    async def graph_nodes(self, user_id):
+        self.calls.append(("graph_nodes", user_id))
+        return self.nodes
+
+    async def graph_edges(self, user_id):
+        self.calls.append(("graph_edges", user_id))
+        return self.edges
+
+    async def entity_subgraph(self, user_id, entity_id):
+        self.calls.append(("entity_subgraph", user_id, entity_id))
+        return self.subgraph
+
+    async def list_communities(self, user_id):
+        self.calls.append(("list_communities", user_id))
+        return self.communities
 
 
 class FakeProfileSummarizer:

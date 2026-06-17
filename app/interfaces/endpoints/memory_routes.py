@@ -12,10 +12,12 @@ from app.interfaces.schemas.memory import (
     MemoryCommunityResponse,
     MemoryConsolidateResponse,
     MemoryCreateRequest,
-    MemoryTimelineEventResponse,
+    MemoryEntitySubgraphResponse,
+    MemoryGraphViewResponse,
     MemoryReflectResponse,
     MemoryResponse,
     MemorySearchRequest,
+    MemoryTimelineEventResponse,
 )
 from app.interfaces.service_dependencies import get_memory_service
 
@@ -170,6 +172,39 @@ async def get_memory_community(
                 for relation in relationships
             ],
         )
+    )
+
+
+@router.get(
+    "/graph",
+    response_model=Response[MemoryGraphViewResponse],
+    summary="查询记忆实体关系图",
+    description="查询当前用户长期记忆图谱中的实体关系全图。",
+)
+async def get_memory_graph(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆实体关系图。"""
+    graph = await memory_service.graph()
+    return Response.success(
+        data=MemoryGraphViewResponse.model_validate(graph.model_dump())
+    )
+
+
+@router.get(
+    "/graph/entity/{entity_id}",
+    response_model=Response[MemoryEntitySubgraphResponse],
+    summary="查询记忆实体一跳子图",
+    description="查询当前用户指定实体及其一跳关系子图。",
+)
+async def get_memory_entity_subgraph(
+    entity_id: str,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户指定实体一跳子图。"""
+    subgraph = await memory_service.entity_subgraph(entity_id)
+    return Response.success(
+        data=MemoryEntitySubgraphResponse.model_validate(subgraph.model_dump())
     )
 
 

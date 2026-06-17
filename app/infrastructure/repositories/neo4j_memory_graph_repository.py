@@ -10,7 +10,10 @@ from app.domain.models.memory_graph import (
     EntityNode,
     GraphRelationFact,
     InsightResult,
+    MemoryEntitySubgraphResult,
     MemoryGraph,
+    MemoryGraphEdgeResult,
+    MemoryGraphNodeResult,
     MemoryGraphResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
@@ -98,13 +101,13 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 "CREATE VECTOR INDEX memory_entity_embedding IF NOT EXISTS "
                 "FOR (e:Entity) ON (e.embedding) OPTIONS {indexConfig: "
                 f"{{`vector.dimensions`: {self._embedding_dims}, "
-                "`vector.similarity_function`: 'cosine'}}}"
+                "`vector.similarity_function`: 'cosine'}}"
             ),
             (
                 "CREATE VECTOR INDEX memory_insight_embedding IF NOT EXISTS "
                 "FOR (i:Insight) ON (i.embedding) OPTIONS {indexConfig: "
                 f"{{`vector.dimensions`: {self._embedding_dims}, "
-                "`vector.similarity_function`: 'cosine'}}}"
+                "`vector.similarity_function`: 'cosine'}}"
             ),
         ]
         async with self._driver.session(database=self._database) as session:
@@ -458,8 +461,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         RETURN event.id AS id,
                event.title AS title,
                event.description AS description,
-               event.event_time AS event_time,
-               event.created_at AS created_at,
+               toString(event.event_time) AS event_time,
+               toString(event.created_at) AS created_at,
                [p IN raw_participants WHERE p.entity_id IS NOT NULL] AS participants
         ORDER BY event_has_time DESC,
                  coalesce(event.event_time, event.created_at) DESC
@@ -503,10 +506,15 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         self, user_id: str, entity_ids: list[str] | None = None
     ) -> list[CommunityVoteEntity]:
         """读取社区聚类投票所需实体。"""
-        where_clause = "WHERE entity.id IN $entity_ids" if entity_ids is not None else ""
-        cypher = """
+        where_clause = (
+            "WHERE entity.id IN $entity_ids" if entity_ids is not None else ""
+        )
+        cypher = (
+            """
         MATCH (entity:Entity {user_id: $user_id})
-        """ + where_clause + """
+        """
+            + where_clause
+            + """
         RETURN entity.id AS id,
                entity.name AS name,
                entity.type AS type,
@@ -514,6 +522,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                coalesce(entity.embedding, []) AS embedding,
                entity.community_id AS community_id
         """
+        )
         async with self._driver.session(database=self._database) as session:
             result = await session.run(
                 cypher,
@@ -597,7 +606,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         WITH community, count(entity) AS count
         SET community.member_count = count,
             community.updated_at = datetime()
-        RETURN count(entity) AS count
+        RETURN count AS count
         """
         async with self._driver.session(database=self._database) as session:
             result = await session.run(
@@ -705,6 +714,105 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         """
         async with self._driver.session(database=self._database) as session:
             await session.run(cypher, user_id=user_id)
+
+    async def graph_nodes(self, user_id: str) -> list[MemoryGraphNodeResult]:
+        """读取当前用户实体关系全图节点。"""
+        cypher = """
+        MATCH (entity:Entity {user_id: $user_id})
+        RETURN entity.id AS id,
+               entity.name AS name,
+               entity.type AS type,
+               entity.description AS description,
+               entity.community_id AS community_id,
+               coalesce(entity.importance, 0.5) AS importance,
+               coalesce(entity.memory_layer, 'short_term') AS memory_layer,
+               coalesce(entity.access_count, 0) AS access_count,
+               coalesce(entity.mention_count, 0) AS mention_count,
+               coalesce(entity.core_facts, []) AS core_facts,
+               coalesce(entity.traits, []) AS traits
+        ORDER BY coalesce(entity.importance, 0.5) DESC,
+                 entity.name ASC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return [self._row_to_graph_node(row) for row in rows]
+
+    async def graph_edges(self, user_id: str) -> list[MemoryGraphEdgeResult]:
+        """读取当前用户实体关系全图边。"""
+        cypher = """
+        MATCH (source:Entity {user_id: $user_id})
+            -[relation:RELATION {user_id: $user_id}]->
+            (target:Entity {user_id: $user_id})
+        RETURN source.id AS source,
+               target.id AS target,
+               relation.name AS predicate,
+               relation.evidence AS evidence
+        ORDER BY coalesce(relation.importance, 0.5) DESC
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return [self._row_to_graph_edge(row) for row in rows]
+
+    async def entity_subgraph(
+        self, user_id: str, entity_id: str
+    ) -> MemoryEntitySubgraphResult:
+        """读取当前用户指定实体的一跳子图。"""
+        node_cypher = """
+        MATCH (center:Entity {id: $entity_id, user_id: $user_id})
+        OPTIONAL MATCH (center)-[:RELATION]-(neighbor:Entity {user_id: $user_id})
+        WITH collect(DISTINCT center) + collect(DISTINCT neighbor) AS raw_nodes
+        UNWIND raw_nodes AS entity
+        WITH DISTINCT entity
+        WHERE entity IS NOT NULL
+        RETURN entity.id AS id,
+               entity.name AS name,
+               entity.type AS type,
+               entity.description AS description,
+               entity.community_id AS community_id,
+               coalesce(entity.importance, 0.5) AS importance,
+               coalesce(entity.memory_layer, 'short_term') AS memory_layer,
+               coalesce(entity.access_count, 0) AS access_count,
+               coalesce(entity.mention_count, 0) AS mention_count,
+               coalesce(entity.core_facts, []) AS core_facts,
+               coalesce(entity.traits, []) AS traits
+        ORDER BY CASE WHEN entity.id = $entity_id THEN 0 ELSE 1 END,
+                 coalesce(entity.importance, 0.5) DESC,
+                 entity.name ASC
+        """
+        edge_cypher = """
+        MATCH (center:Entity {id: $entity_id, user_id: $user_id})
+        MATCH (center)-[relation:RELATION]-(neighbor:Entity {user_id: $user_id})
+        WITH collect(DISTINCT center.id) + collect(DISTINCT neighbor.id) AS node_ids
+        MATCH (source:Entity {user_id: $user_id})
+            -[relation:RELATION {user_id: $user_id}]->
+            (target:Entity {user_id: $user_id})
+        WHERE source.id IN node_ids AND target.id IN node_ids
+        RETURN source.id AS source,
+               target.id AS target,
+               relation.name AS predicate,
+               relation.evidence AS evidence
+        ORDER BY coalesce(relation.importance, 0.5) DESC
+        """
+        async with self._driver.session(database=self._database) as session:
+            node_result = await session.run(
+                node_cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+            )
+            node_rows = await node_result.data()
+            edge_result = await session.run(
+                edge_cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+            )
+            edge_rows = await edge_result.data()
+        return MemoryEntitySubgraphResult(
+            center=entity_id,
+            nodes=[self._row_to_graph_node(row) for row in node_rows],
+            edges=[self._row_to_graph_edge(row) for row in edge_rows],
+        )
 
     async def _search_fulltext(
         self, user_id: str, query: str, top_k: int
@@ -1046,6 +1154,33 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             target_entity_id=str(row.get("target_entity_id") or ""),
             target_name=str(row.get("target_name") or ""),
             name=str(row.get("name") or ""),
+            evidence=str(row.get("evidence") or ""),
+        )
+
+    @staticmethod
+    def _row_to_graph_node(row: dict[str, Any]) -> MemoryGraphNodeResult:
+        """把 Neo4j 行转换为图谱展示节点。"""
+        return MemoryGraphNodeResult(
+            id=str(row.get("id") or ""),
+            name=str(row.get("name") or ""),
+            type=str(row.get("type") or ""),
+            description=str(row.get("description") or ""),
+            community_id=row.get("community_id"),
+            importance=float(row.get("importance") or 0.5),
+            memory_layer=str(row.get("memory_layer") or "short_term"),
+            access_count=int(row.get("access_count") or 0),
+            mention_count=int(row.get("mention_count") or 0),
+            core_facts=row.get("core_facts") or [],
+            traits=row.get("traits") or [],
+        )
+
+    @staticmethod
+    def _row_to_graph_edge(row: dict[str, Any]) -> MemoryGraphEdgeResult:
+        """把 Neo4j 行转换为图谱展示边。"""
+        return MemoryGraphEdgeResult(
+            source=str(row.get("source") or ""),
+            target=str(row.get("target") or ""),
+            predicate=str(row.get("predicate") or ""),
             evidence=str(row.get("evidence") or ""),
         )
 

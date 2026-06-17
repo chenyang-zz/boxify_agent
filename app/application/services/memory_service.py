@@ -11,7 +11,9 @@ from app.domain.models.memory_graph import (
     CommunityMemberResult,
     CommunityRelationResult,
     CommunityResult,
+    MemoryEntitySubgraphResult,
     MemoryCommunityClusterStats,
+    MemoryGraphViewResult,
     MemoryTimelineEventResult,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
@@ -164,3 +166,27 @@ class MemoryService:
             raise BadRequestError("记忆图谱不可用，无法查询事件时间线")
         limit = max(1, min(limit, 200))
         return await self._graph_repository.event_timeline(self._user_id, limit)
+
+    async def graph(self) -> MemoryGraphViewResult:
+        """读取当前用户完整实体关系图。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询实体关系图")
+        nodes = await self._graph_repository.graph_nodes(self._user_id)
+        edges = await self._graph_repository.graph_edges(self._user_id)
+        communities = await self._graph_repository.list_communities(self._user_id)
+        return MemoryGraphViewResult(
+            nodes=nodes,
+            edges=edges,
+            communities=communities,
+        )
+
+    async def entity_subgraph(self, entity_id: str) -> MemoryEntitySubgraphResult:
+        """读取当前用户单实体一跳子图。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询实体关系图")
+        subgraph = await self._graph_repository.entity_subgraph(
+            self._user_id, entity_id
+        )
+        if not any(node.id == entity_id for node in subgraph.nodes):
+            raise NotFoundError("实体不存在或无权访问")
+        return subgraph

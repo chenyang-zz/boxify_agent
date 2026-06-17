@@ -295,6 +295,47 @@ class MemoryTimelineEventResult(BaseModel):
     participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
 
 
+class MemoryGraphNodeResult(BaseModel):
+    """记忆图谱可视化实体节点。"""
+
+    id: str
+    name: str
+    type: str
+    description: str = ""
+    community_id: str | None = None
+    importance: float = 0.5
+    memory_layer: str = "short_term"
+    access_count: int = 0
+    mention_count: int = 0
+    core_facts: list[str] = Field(default_factory=list)
+    traits: list[str] = Field(default_factory=list)
+
+
+class MemoryGraphEdgeResult(BaseModel):
+    """记忆图谱可视化实体关系边。"""
+
+    source: str
+    target: str
+    predicate: str
+    evidence: str = ""
+
+
+class MemoryGraphViewResult(BaseModel):
+    """当前用户完整实体关系图。"""
+
+    nodes: list[MemoryGraphNodeResult] = Field(default_factory=list)
+    edges: list[MemoryGraphEdgeResult] = Field(default_factory=list)
+    communities: list[CommunityResult] = Field(default_factory=list)
+
+
+class MemoryEntitySubgraphResult(BaseModel):
+    """单实体一跳子图。"""
+
+    center: str
+    nodes: list[MemoryGraphNodeResult] = Field(default_factory=list)
+    edges: list[MemoryGraphEdgeResult] = Field(default_factory=list)
+
+
 class GraphRelationFact(BaseModel):
     """检索返回的一跳关系事实。"""
 

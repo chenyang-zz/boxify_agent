@@ -11,7 +11,10 @@ from app.domain.models.memory_graph import (
     EventNode,
     InsightResult,
     InvolvesEdge,
+    MemoryEntitySubgraphResult,
     MemoryGraph,
+    MemoryGraphEdgeResult,
+    MemoryGraphNodeResult,
     MemoryPromotionStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -470,7 +473,7 @@ async def test_neo4j_repository_manages_community_schema_assignment_and_queries(
                     "embedding": [0.2, 0.3],
                 }
             ],
-            "RETURN count(entity) AS count": [{"count": 2}],
+            "RETURN count AS count": [{"count": 2}],
             "RETURN community.id AS id": [
                 {
                     "id": "community-music",
@@ -648,6 +651,130 @@ async def test_neo4j_repository_returns_event_timeline_by_user():
     assert params == {"user_id": "user-a", "limit": 50}
 
 
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_graph_view_nodes_and_edges_by_user():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "MATCH (entity:Entity {user_id: $user_id})": [
+                _graph_node_row("entity-1")
+            ],
+            "relation:RELATION {user_id: $user_id}": [
+                _graph_edge_row()
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    nodes = await repository.graph_nodes("user-a")
+    edges = await repository.graph_edges("user-a")
+
+    assert nodes == [
+        MemoryGraphNodeResult(
+            id="entity-1",
+            name="周杰伦",
+            type="生命体",
+            description="歌手",
+            community_id="community-music",
+            importance=0.8,
+            memory_layer="long_term",
+            access_count=2,
+            mention_count=3,
+            core_facts=["用户长期喜欢周杰伦"],
+            traits=["偏好华语流行"],
+        )
+    ]
+    assert edges == [
+        MemoryGraphEdgeResult(
+            source="entity-user",
+            target="entity-1",
+            predicate="偏好",
+            evidence="用户喜欢周杰伦。",
+        )
+    ]
+    node_query, node_params = driver.executed[0]
+    edge_query, edge_params = driver.executed[1]
+    assert "MATCH (entity:Entity {user_id: $user_id})" in node_query
+    assert "MATCH (source:Entity {user_id: $user_id})" in edge_query
+    assert "Event" not in edge_query
+    assert "INVOLVES" not in edge_query
+    assert node_params == {"user_id": "user-a"}
+    assert edge_params == {"user_id": "user-a"}
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_entity_subgraph_by_user():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "OPTIONAL MATCH (center)-[:RELATION]-(neighbor:Entity {user_id: $user_id})": [
+                _graph_node_row("entity-1"),
+                _graph_node_row("entity-user", name="用户", description="当前用户"),
+            ],
+            "MATCH (center)-[relation:RELATION]-(neighbor:Entity {user_id: $user_id})": [
+                _graph_edge_row()
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    subgraph = await repository.entity_subgraph("user-a", "entity-1")
+
+    assert subgraph == MemoryEntitySubgraphResult(
+        center="entity-1",
+        nodes=[
+            MemoryGraphNodeResult(
+                id="entity-1",
+                name="周杰伦",
+                type="生命体",
+                description="歌手",
+                community_id="community-music",
+                importance=0.8,
+                memory_layer="long_term",
+                access_count=2,
+                mention_count=3,
+                core_facts=["用户长期喜欢周杰伦"],
+                traits=["偏好华语流行"],
+            ),
+            MemoryGraphNodeResult(
+                id="entity-user",
+                name="用户",
+                type="生命体",
+                description="当前用户",
+                community_id="community-music",
+                importance=0.8,
+                memory_layer="long_term",
+                access_count=2,
+                mention_count=3,
+                core_facts=["用户长期喜欢周杰伦"],
+                traits=["偏好华语流行"],
+            ),
+        ],
+        edges=[
+            MemoryGraphEdgeResult(
+                source="entity-user",
+                target="entity-1",
+                predicate="偏好",
+                evidence="用户喜欢周杰伦。",
+            )
+        ],
+    )
+    node_query, node_params = driver.executed[0]
+    edge_query, edge_params = driver.executed[1]
+    assert "MATCH (center:Entity {id: $entity_id, user_id: $user_id})" in node_query
+    assert "MATCH (center:Entity {id: $entity_id, user_id: $user_id})" in edge_query
+    assert "Event" not in edge_query
+    assert "INVOLVES" not in edge_query
+    assert node_params == {"user_id": "user-a", "entity_id": "entity-1"}
+    assert edge_params == {"user_id": "user-a", "entity_id": "entity-1"}
+
+
 class FakeNeo4jDriver:
     def __init__(self, result_rows=None, result_rows_by_keyword=None):
         self.executed = []
@@ -723,4 +850,29 @@ def _entity_row(
         },
         "relations": [],
         "score": score,
+    }
+
+
+def _graph_node_row(entity_id: str, *, name: str = "周杰伦", description: str = "歌手"):
+    return {
+        "id": entity_id,
+        "name": name,
+        "type": "生命体",
+        "description": description,
+        "community_id": "community-music",
+        "importance": 0.8,
+        "memory_layer": "long_term",
+        "access_count": 2,
+        "mention_count": 3,
+        "core_facts": ["用户长期喜欢周杰伦"],
+        "traits": ["偏好华语流行"],
+    }
+
+
+def _graph_edge_row():
+    return {
+        "source": "entity-user",
+        "target": "entity-1",
+        "predicate": "偏好",
+        "evidence": "用户喜欢周杰伦。",
     }

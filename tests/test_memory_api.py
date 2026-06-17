@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.application.errors.exceptions import NotFoundError
 from app.application.services.auth_service import AuthService
 from app.application.services.memory_service import MemoryService
 from app.domain.models.memory_graph import (
@@ -8,6 +9,10 @@ from app.domain.models.memory_graph import (
     CommunityResult,
     MemoryCommunityClusterStats,
     MemoryConsolidationStats,
+    MemoryEntitySubgraphResult,
+    MemoryGraphEdgeResult,
+    MemoryGraphNodeResult,
+    MemoryGraphViewResult,
     MemoryReflectStats,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -277,6 +282,136 @@ def test_list_memory_timeline_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_get_memory_graph_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeGraphMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.get(
+        "/api/memories/graph",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "nodes": [
+            {
+                "id": "entity-1",
+                "name": "周杰伦",
+                "type": "生命体",
+                "description": "歌手",
+                "community_id": "community-music",
+                "importance": 0.8,
+                "memory_layer": "long_term",
+                "access_count": 2,
+                "mention_count": 3,
+                "core_facts": ["用户长期喜欢周杰伦"],
+                "traits": ["偏好华语流行"],
+            }
+        ],
+        "edges": [
+            {
+                "source": "entity-user",
+                "target": "entity-1",
+                "predicate": "偏好",
+                "evidence": "用户喜欢周杰伦。",
+            }
+        ],
+        "communities": [
+            {
+                "id": "community-music",
+                "name": "音乐偏好",
+                "summary": "用户的音乐相关实体",
+                "member_count": 1,
+            }
+        ],
+    }
+    app.dependency_overrides.clear()
+
+
+def test_get_memory_entity_subgraph_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeGraphMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.get(
+        "/api/memories/graph/entity/entity-1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["center"] == "entity-1"
+    assert response.json()["data"]["nodes"][0]["name"] == "周杰伦"
+    assert response.json()["data"]["edges"][0]["predicate"] == "偏好"
+    app.dependency_overrides.clear()
+
+
+def test_get_memory_entity_subgraph_returns_404_for_missing_entity(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeGraphMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.get(
+        "/api/memories/graph/entity/missing",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["msg"] == "实体不存在或无权访问"
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -403,3 +538,54 @@ class FakeTimelineMemoryService:
                 ],
             )
         ]
+
+
+class FakeGraphMemoryService:
+    def __init__(self):
+        self.nodes = [
+            MemoryGraphNodeResult(
+                id="entity-1",
+                name="周杰伦",
+                type="生命体",
+                description="歌手",
+                community_id="community-music",
+                importance=0.8,
+                memory_layer="long_term",
+                access_count=2,
+                mention_count=3,
+                core_facts=["用户长期喜欢周杰伦"],
+                traits=["偏好华语流行"],
+            )
+        ]
+        self.edges = [
+            MemoryGraphEdgeResult(
+                source="entity-user",
+                target="entity-1",
+                predicate="偏好",
+                evidence="用户喜欢周杰伦。",
+            )
+        ]
+        self.communities = [
+            CommunityResult(
+                id="community-music",
+                name="音乐偏好",
+                summary="用户的音乐相关实体",
+                member_count=1,
+            )
+        ]
+
+    async def graph(self):
+        return MemoryGraphViewResult(
+            nodes=self.nodes,
+            edges=self.edges,
+            communities=self.communities,
+        )
+
+    async def entity_subgraph(self, entity_id):
+        if entity_id == "missing":
+            raise NotFoundError("实体不存在或无权访问")
+        return MemoryEntitySubgraphResult(
+            center=entity_id,
+            nodes=self.nodes,
+            edges=self.edges,
+        )
