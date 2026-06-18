@@ -1,0 +1,168 @@
+app/domain/repositories/memory_repository.py
+  s_b85c67e2355151::t_46fcc9aa44baf2 4,43-53
+tests/test_memory_service.py
+  s_b85c67e2355151::t_015372fa46dd1d 26-29,594-680,732-756,1068-1115
+core/config.py
+  s_e16b8b24fb0f54::t_7dce5e474ef57d 55-70
+  h_e1f1392360ad67 72
+  s_e16b8b24fb0f54::t_cb3df3687f96ac 71
+  s_b85c67e2355151::t_349edb549ade1c 94-103
+tests/test_memory_entity_deduplicator.py
+  s_b85c67e2355151::t_ff60cfe1442e92 1-238
+app/tasks/memory/consolidate.py
+  s_44b7f7a2f18bd5::t_e057bd272784db 22
+tests/test_auth_api.py
+  s_e16b8b24fb0f54::t_c2374c425c9a78 178-227
+  s_e16b8b24fb0f54::t_85ade907db567f 1-2,6,101-177,228-356,404-452,470-491,495-499
+.env.example
+  s_e16b8b24fb0f54::t_5b625b861e36ab 135-150
+  s_e16b8b24fb0f54::t_cf2a0d3ad42b3f 151-152
+app/utils/collections.py
+  s_44b7f7a2f18bd5::t_1d30aea60d6284 1-7
+app/application/services/auth_service.py
+  s_e16b8b24fb0f54::t_53cc408939ccd7 2,11-19,32-33,39-40,81-119,142-143,145-150,152-184,186,188-206,208-214
+  s_44b7f7a2f18bd5::t_b1fb7bd6e59bd9 144,151,187,207
+  s_e16b8b24fb0f54::t_86970301501648 34,41,48-51
+  s_e16b8b24fb0f54::t_7336632ae171bf 3,5-9,185
+app/interfaces/endpoints/memory_routes.py
+  s_b85c67e2355151::t_f2dfc986a2a7c1 20-21,320-350
+app/domain/services/memory/__init__.py
+  s_b85c67e2355151::t_3dfbd9bb927713 5,20
+app/application/security/password.py
+  s_44b7f7a2f18bd5::t_ebb42f8d6f0403 52,57
+app/bootstrap/memory.py
+  s_b85c67e2355151::t_bcd9d85aa27c1a 10,48-59,64
+tests/test_memory_fact_extractor.py
+  s_b85c67e2355151::t_505d447f322916 6,42-58
+app/domain/models/memory_graph.py
+  s_b85c67e2355151::t_c4f8717d0728bc 315-341
+  s_b85c67e2355151::t_307e765fa51c78 2,7-19,243-312
+alembic/versions/f6c2e9a4b7d1_add_oauth_fields_to_users.py
+  s_e16b8b24fb0f54::t_78c85faf394525 1-44
+app/domain/services/memory/insight_generator.py
+  s_44b7f7a2f18bd5::t_66951c858ee33a 6,53-55
+app/interfaces/schemas/memory.py
+  s_b85c67e2355151::t_d451e57bd141a5 225-296
+app/domain/services/memory/graph_extractor.py
+  s_b85c67e2355151::t_79abaff6ad063e 23,36,42,161,164-167,171,174,192,201-205,254-264,293-334
+app/domain/services/memory/profile_summarizer.py
+  s_44b7f7a2f18bd5::t_c703f79a580ba4 8,39-40
+app/domain/services/prompts/memory.py
+  s_b85c67e2355151::t_6afb2217dfa422 100-129
+tests/test_json_utils.py
+  s_44b7f7a2f18bd5::t_fe868a2c6aff92 1-50
+app/interfaces/schemas/auth.py
+  s_e16b8b24fb0f54::t_381e18d0499aba 27-32
+app/interfaces/service_dependencies.py
+  s_e16b8b24fb0f54::t_ba90fd60663229 94
+  s_44b7f7a2f18bd5::t_924d8d66cd6d44 321
+  s_e16b8b24fb0f54::t_ab3d13e046c32a 18,81-93
+app/application/security/token.py
+  s_44b7f7a2f18bd5::t_78692c140ff813 68,76,82,87,92
+app/domain/services/memory/fact_extractor.py
+  s_44b7f7a2f18bd5::t_894d0803c1f8e6 13,112-114,173-176
+app/infrastructure/repositories/db_uow.py
+  s_44b7f7a2f18bd5::t_dd7c0545f1b5f0 57,62,71,88
+app/domain/services/memory/community_summarizer.py
+  s_44b7f7a2f18bd5::t_40e40eed0d48e7 14,52
+app/interfaces/endpoints/auth_routes.py
+  s_e16b8b24fb0f54::t_ae7bca5f61bf79 132-133
+  s_e16b8b24fb0f54::t_b626d9dee2c868 2,5,36-64,122-131,134-137
+  s_e16b8b24fb0f54::t_c9f5a209ac0671 9-14,88-120
+app/tasks/memory/reflect.py
+  s_44b7f7a2f18bd5::t_9dbfa3e8cf3b4b 24
+app/infrastructure/models/user.py
+  s_e16b8b24fb0f54::t_213a3a29467d68 4-11
+  s_e16b8b24fb0f54::t_51890ba5866942 22-29,34-37
+tests/test_memory_graph_extractor.py
+  s_b85c67e2355151::t_7ea55dccf11372 1-2,6,326-409,448-478
+app/tasks/memory/scheduled.py
+  s_44b7f7a2f18bd5::t_ff166efc9a3bcf 57,83,90,97,106
+tests/test_collection_utils.py
+  s_44b7f7a2f18bd5::t_fc64f026289e7c 1-15
+app/infrastructure/repositories/db_memory_repository.py
+  s_b85c67e2355151::t_f0af97e3f1492a 5,88-124
+  s_44b7f7a2f18bd5::t_b9495d27b1fcef 127
+app/application/security/app_config_encryption.py
+  s_44b7f7a2f18bd5::t_c7df263a12681a 79,85,89,97,104,109,115,121
+app/domain/repositories/memory_graph_repository.py
+  s_b85c67e2355151::t_5809971d48b1ab 19-21,225-240
+app/infrastructure/repositories/neo4j_memory_graph_repository.py
+  s_b85c67e2355151::t_87a98b7da12d9f 1970-1989
+  s_b85c67e2355151::t_b990037f46253d 22-25,992-1134
+  s_b85c67e2355151::t_2af4dbfc21f446 1510-1672
+  s_b85c67e2355151::t_bb866785b8befd 149-150,2007-2010
+app/domain/services/memory/entity_deduplicator.py
+  s_44b7f7a2f18bd5::t_44120190683e6d 16,270,273,296-297
+  h_e1f1392360ad67 252,275,303,345,347,360
+  s_b85c67e2355151::t_68f1934d11e199 331-332
+  s_b85c67e2355151::t_4250f0fcdb57d4 1-15,18-140,142-150,152-164,166-193,197-201,203-214,216-231,233-239,241-251,253,255-269,271-272,274,276,278-295,298-302,304-310,312-324,326-330,333-344,346,348,350-359,363
+  s_44b7f7a2f18bd5::t_b688a0ebaac6e3 141,151,165,202,215,232,240,254,277,311,325,349,362
+  s_44b7f7a2f18bd5::t_73d41f664efc3c 361
+  s_44b7f7a2f18bd5::t_5953ca73510d86 17,194-196
+tests/test_memory_graph_repository.py
+  s_b85c67e2355151::t_546a2450891e32 1143
+  s_b85c67e2355151::t_918adc0bf62a5e 22-25,1020-1142,1144-1150
+  s_b85c67e2355151::t_85037d71462d74 364,383
+tests/test_auth_security.py
+  s_e16b8b24fb0f54::t_f452809078db01 8,33-45,50-60,62
+  s_e16b8b24fb0f54::t_fef5a9292cab3b 46-49,61,63
+app/infrastructure/repositories/db_user_repository.py
+  s_e16b8b24fb0f54::t_a0869da3e53a3a 29-39
+app/tasks/memory/cluster.py
+  s_44b7f7a2f18bd5::t_afff7caf5ab613 25
+app/utils/json_utils.py
+  h_e1f1392360ad67 4,8
+  s_44b7f7a2f18bd5::t_bef284719fd24c 1-3,5-7,9-21
+app/application/services/memory_service.py
+  s_b85c67e2355151::t_8540a8b82b8b1f 1,10-14,26-29,45-46,61
+  s_b85c67e2355151::t_09c7ca1088cda9 269-326
+app/domain/models/user.py
+  s_e16b8b24fb0f54::t_7a54add490fe86 15-18
+app/domain/repositories/user_repository.py
+  s_e16b8b24fb0f54::t_ffdf11c2f02b90 17-22
+app/application/services/oauth.py
+  s_e16b8b24fb0f54::t_b33dc049a3e6fb 394-397
+  s_44b7f7a2f18bd5::t_6be5497a1ace7f 153,229,255,319,351,364,376,414,425,436,441
+  s_e16b8b24fb0f54::t_8f5863d6b9ea13 1-131,133-152,154-228,230-254,256-318,320-350,352-363,365-375,377-393,398-413,415-424,426-435,437-440,442-443
+  h_e1f1392360ad67 132
+tests/test_memory_api.py
+  s_b85c67e2355151::t_07f1a26020c09c 22-27,43-46,50-51,554-642,899-956
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "617af420d2a80f5468bc6c7a71989f043fa08401",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    },
+    "s_b85c67e2355151": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0c4-9dd1-7b42-b028-e30d00a7b87d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    },
+    "s_e16b8b24fb0f54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ed9cd-8a68-79a3-8b1c-3755f689c395",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
