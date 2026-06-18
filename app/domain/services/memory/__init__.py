@@ -2,6 +2,7 @@ from app.domain.services.memory.active_recall import MemoryActiveRecall
 from app.domain.services.memory.community_clusterer import MemoryCommunityClusterer
 from app.domain.services.memory.community_summarizer import MemoryCommunitySummarizer
 from app.domain.services.memory.consolidator import MemoryConsolidator
+from app.domain.services.memory.entity_deduplicator import MemoryEntityDeduplicator
 from app.domain.services.memory.manager import (
     LongTermMemoryManager,
     MemorySearch,
@@ -16,6 +17,7 @@ __all__ = [
     "MemoryCommunityClusterer",
     "MemoryCommunitySummarizer",
     "MemoryConsolidator",
+    "MemoryEntityDeduplicator",
     "MemoryInsightGenerator",
     "MemoryProfileSummarizer",
     "MemoryReflector",

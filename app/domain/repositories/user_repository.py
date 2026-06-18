@@ -14,6 +14,12 @@ class UserRepository(Protocol):
         """根据用户名获取用户"""
         ...
 
+    async def get_by_oauth_identity(
+        self, provider: str, subject: str
+    ) -> Optional[User]:
+        """根据第三方OAuth身份获取用户"""
+        ...
+
     async def count(self) -> int:
         """获取用户总数"""
         ...

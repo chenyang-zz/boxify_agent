@@ -97,3 +97,33 @@ COMMUNITY_SUMMARY_PROMPT = """
 关系：
 {relationships}
 """
+
+DEDUP_ENTITY_SYSTEM_PROMPT = "你是保守的记忆实体消歧器，只返回严格 JSON。"
+
+DEDUP_ENTITY_PROMPT = """
+判断两个候选实体是否指向现实中的同一个对象。
+
+只返回形如：
+{{"same_entity":true,"canonical_idx":1,"confidence":0.91,"reason":"常用名和别名指向同一人。"}}
+
+要求：
+- 如果只是同类型、相关、上下级、同组织成员或拿不准，same_entity 必须为 false。
+- canonical_idx 只能是 {left_idx} 或 {right_idx}，代表更适合作为保留实体的一方。
+- confidence 必须是 0 到 1 之间的小数；低于 0.8 不会合并。
+- reason 简短说明依据，不要编造输入中没有的信息。
+
+候选 A（idx={left_idx}）：
+名称：{left_name}
+类型：{left_type}
+描述：{left_description}
+
+候选 B（idx={right_idx}）：
+名称：{right_name}
+类型：{right_type}
+描述：{right_description}
+
+规则初筛信号：
+- 名称相似度：{name_similarity}
+- 向量相似度：{embedding_similarity}
+- 名称包含关系：{name_contains}
+"""

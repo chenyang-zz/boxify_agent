@@ -16,6 +16,9 @@ from app.domain.models.memory_graph import (
     MemoryMergeDuplicatesResult,
     MemoryProfileEntityResult,
     MemoryPromotionStats,
+    MemoryQualityGraphCountsResult,
+    MemoryQualityIssueListResult,
+    MemoryQualityIssueSummaryResult,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
 )
@@ -217,6 +220,24 @@ class MemoryGraphRepository(Protocol):
 
     async def delete_entity(self, user_id: str, entity_id: str) -> bool:
         """删除当前用户单个实体。"""
+        ...
+
+    async def quality_graph_counts(
+        self, user_id: str
+    ) -> MemoryQualityGraphCountsResult:
+        """统计当前用户图谱节点和关系数量。"""
+        ...
+
+    async def quality_issue_summary(
+        self, user_id: str
+    ) -> MemoryQualityIssueSummaryResult:
+        """统计当前用户图谱质量问题摘要。"""
+        ...
+
+    async def quality_issues(
+        self, user_id: str, category: str, limit: int
+    ) -> MemoryQualityIssueListResult:
+        """读取当前用户指定质量问题类别样本。"""
         ...
 
     async def merge_duplicate_entities(

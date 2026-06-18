@@ -21,6 +21,7 @@ async def run_reflect_memory(
 
 
 async def _run(user_id: str) -> MemoryReflectStats:
+    """初始化 worker 外部资源并执行单个用户的记忆反思。"""
     await get_postgres().init()
     await get_neo4j().init()
     try:

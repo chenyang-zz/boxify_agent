@@ -1,3 +1,4 @@
+import logging
 from typing import Callable
 
 from app.application.errors.exceptions import BadRequestError, NotFoundError
@@ -6,7 +7,11 @@ from app.domain.external.json_parser import JSONParser
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource
-from app.domain.models.memory_graph import MemoryConsolidationStats, MemoryReflectStats
+from app.domain.models.memory_graph import (
+    MEMORY_QUALITY_ISSUE_CATEGORIES,
+    MemoryConsolidationStats,
+    MemoryReflectStats,
+)
 from app.domain.models.memory_graph import (
     CommunityMemberResult,
     CommunityRelationResult,
@@ -18,6 +23,10 @@ from app.domain.models.memory_graph import (
     MemoryMergeDuplicatesResult,
     MemoryProfileGroupResult,
     MemoryProfileResult,
+    MemoryQualityGraphCountsResult,
+    MemoryQualityIssueListResult,
+    MemoryQualityIssueSummaryResult,
+    MemoryQualityOverviewResult,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
 )
@@ -33,6 +42,8 @@ from app.domain.services.memory import (
     MemoryReflector,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class MemoryService:
     """长期记忆应用服务。"""
@@ -47,6 +58,7 @@ class MemoryService:
         llm: LLM | None = None,
         json_parser: JSONParser | None = None,
     ) -> None:
+        self._uow_factory = uow_factory
         self._user_id = user_id
         self._graph_repository = graph_repository
         self._embedding = embedding
@@ -254,3 +266,61 @@ class MemoryService:
         if relations is None:
             raise NotFoundError("实体不存在或无权访问")
         return relations
+
+    async def quality(self) -> MemoryQualityOverviewResult:
+        """读取当前用户记忆质量审计总览。"""
+        async with self._uow_factory() as uow:
+            pg_status_counts = await uow.memory.status_counts(self._user_id)
+            recent_failed = await uow.memory.recent_failed(self._user_id, limit=5)
+        pg_total = sum(pg_status_counts.values())
+        if not self._graph_repository:
+            return MemoryQualityOverviewResult(
+                pg_total=pg_total,
+                pg_status_counts=pg_status_counts,
+                recent_failed=recent_failed,
+                graph_available=False,
+            )
+        try:
+            graph_counts = await self._graph_repository.quality_graph_counts(
+                self._user_id
+            )
+            issue_summary = await self._graph_repository.quality_issue_summary(
+                self._user_id
+            )
+        except Exception as e:
+            logger.warning("记忆质量审计图谱统计失败，返回 PG 统计: %s", e)
+            return MemoryQualityOverviewResult(
+                pg_total=pg_total,
+                pg_status_counts=pg_status_counts,
+                recent_failed=recent_failed,
+                graph_available=False,
+                graph_counts=MemoryQualityGraphCountsResult(),
+                issue_summary=MemoryQualityIssueSummaryResult(),
+            )
+        return MemoryQualityOverviewResult(
+            pg_total=pg_total,
+            pg_status_counts=pg_status_counts,
+            recent_failed=recent_failed,
+            graph_available=True,
+            graph_counts=graph_counts,
+            issue_summary=issue_summary,
+        )
+
+    async def quality_issues(
+        self, category: str, limit: int
+    ) -> MemoryQualityIssueListResult:
+        """读取指定类别的记忆质量问题样本。"""
+        if category not in MEMORY_QUALITY_ISSUE_CATEGORIES:
+            raise BadRequestError("未知质量问题类别")
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询质量问题")
+        limit = max(1, min(limit, 200))
+        try:
+            return await self._graph_repository.quality_issues(
+                self._user_id,
+                category,
+                limit,
+            )
+        except Exception as e:
+            logger.warning("记忆质量问题查询失败: %s", e)
+            raise BadRequestError("记忆图谱不可用，无法查询质量问题") from e

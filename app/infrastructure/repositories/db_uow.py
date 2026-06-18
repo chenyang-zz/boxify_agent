@@ -54,10 +54,12 @@ class DBUnitOfWork(IUnitOfWork):
 
     @classmethod
     def _current_task_is_cancelling(cls) -> bool:
+        """判断当前 asyncio task 是否正处于取消流程。"""
         task = asyncio.current_task()
         return bool(task and task.cancelling())
 
     async def _close_session(self, db_session: AsyncSession) -> None:
+        """关闭指定 session，并在仍为当前会话时清空引用。"""
         try:
             await db_session.close()
         finally:
@@ -66,6 +68,7 @@ class DBUnitOfWork(IUnitOfWork):
 
     @classmethod
     async def _rollback_and_close_detached(cls, db_session: AsyncSession) -> None:
+        """在后台任务中回滚并关闭已脱离当前 UoW 的 session。"""
         try:
             try:
                 await db_session.rollback()
@@ -82,6 +85,7 @@ class DBUnitOfWork(IUnitOfWork):
                 logger.warning(f"后台UoW关闭会话操作失败: {e}")
 
     def _schedule_rollback_and_close(self, db_session: AsyncSession) -> None:
+        """将取消场景下的回滚关闭操作转入后台执行。"""
         cleanup = self._rollback_and_close_detached(db_session)
         try:
             asyncio.create_task(cleanup)

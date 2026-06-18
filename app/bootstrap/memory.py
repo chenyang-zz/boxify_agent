@@ -7,6 +7,7 @@ from app.domain.models.app_config import AppConfig
 from app.domain.services.memory.community_clusterer import MemoryCommunityClusterer
 from app.domain.services.memory.community_summarizer import MemoryCommunitySummarizer
 from app.domain.services.memory.consolidator import MemoryConsolidator
+from app.domain.services.memory.entity_deduplicator import MemoryEntityDeduplicator
 from app.domain.services.memory.fact_extractor import MemoryFactExtractor
 from app.domain.services.memory.graph_extractor import MemoryGraphExtractor
 from app.domain.services.memory.insight_generator import MemoryInsightGenerator
@@ -44,11 +45,23 @@ async def build_memory_graph_extractor(
 ) -> MemoryGraphExtractor:
     """按用户组装记忆图谱萃取流水线。"""
     embedding = await build_embedding_model(user_id)
-    fact_extractor = MemoryFactExtractor(llm=llm, json_parser=RepairJSONParser())
+    json_parser = RepairJSONParser()
+    fact_extractor = MemoryFactExtractor(llm=llm, json_parser=json_parser)
+    deduplicator = None
+    if settings.memory_dedup_enable_llm:
+        deduplicator = MemoryEntityDeduplicator(
+            llm=llm,
+            json_parser=json_parser,
+            similarity_threshold=settings.memory_dedup_similarity_threshold,
+            merge_confidence=settings.memory_dedup_merge_confidence,
+            max_candidates=settings.memory_dedup_max_candidates,
+            enable_llm=settings.memory_dedup_enable_llm,
+        )
     return MemoryGraphExtractor(
         fact_extractor=fact_extractor,
         embedding=embedding,
         graph_repository=build_memory_graph_repository(),
+        deduplicator=deduplicator,
     )
 
 

@@ -1,6 +1,3 @@
-import json
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.external.json_parser import JSONParser
@@ -13,6 +10,7 @@ from app.domain.services.prompts.memory import (
     EXTRACT_TRIPLETS_SYSTEM_PROMPT,
 )
 from app.utils.datetime import parse_optional_datetime
+from app.utils.json_utils import parse_json_object
 
 
 class ExtractedEntity(BaseModel):
@@ -111,7 +109,9 @@ class MemoryFactExtractor:
                 ],
                 response_format={"type": "json_object"},
             )
-            parsed = await self._parse_json(response.get("content"), {"statements": []})
+            parsed = await parse_json_object(
+                self._json_parser, response.get("content"), {"statements": []}
+            )
             extracted = _ExtractedStatements.model_validate(parsed)
             for statement in extracted.statements:
                 text = statement.statement.strip()
@@ -170,21 +170,9 @@ class MemoryFactExtractor:
             ],
             response_format={"type": "json_object"},
         )
-        parsed = await self._parse_json(
-            response.get("content"), {"entities": [], "triplets": [], "events": []}
+        parsed = await parse_json_object(
+            self._json_parser,
+            response.get("content"),
+            {"entities": [], "triplets": [], "events": []},
         )
         return ExtractedTriplets.model_validate(parsed)
-
-    async def _parse_json(self, content: Any, default_value: dict[str, Any]) -> Any:
-        """解析 LLM 返回内容，异常或非对象结果统一回退到默认结构。"""
-        if not isinstance(content, str):
-            content = json.dumps(content, ensure_ascii=False)
-        try:
-            parsed = await self._json_parser.invoke(
-                content, default_value=default_value
-            )
-        except Exception:
-            return default_value
-        if not isinstance(parsed, dict):
-            return default_value
-        return parsed

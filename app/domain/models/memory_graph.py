@@ -1,7 +1,21 @@
 from datetime import datetime
+from typing import Any
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from pydantic import BaseModel, Field
+
+MEMORY_QUALITY_ISSUE_CATEGORIES = frozenset(
+    {
+        "duplicate_entities",
+        "missing_embeddings",
+        "orphan_entities",
+        "orphan_statements",
+        "broken_relations",
+        "expired_relations",
+        "empty_communities",
+        "orphan_insights",
+    }
+)
 
 
 def stable_memory_graph_id(*parts: str) -> str:
@@ -224,6 +238,105 @@ class MemoryMergeDuplicatesResult(BaseModel):
 
     removed_entities: int = 0
     merged_groups: int = 0
+
+
+class MemoryQualityGraphCountsResult(BaseModel):
+    """当前用户记忆图谱节点和关系数量统计。"""
+
+    dialogues: int = 0
+    chunks: int = 0
+    statements: int = 0
+    entities: int = 0
+    relations: int = 0
+    events: int = 0
+    involves: int = 0
+    communities: int = 0
+    insights: int = 0
+
+
+class MemoryQualityIssueSummaryResult(BaseModel):
+    """当前用户记忆质量问题摘要统计。"""
+
+    duplicate_entities: int = 0
+    missing_embeddings: int = 0
+    orphan_entities: int = 0
+    orphan_statements: int = 0
+    broken_relations: int = 0
+    expired_relations: int = 0
+    empty_communities: int = 0
+    orphan_insights: int = 0
+
+
+class MemoryQualityFailedMemoryResult(BaseModel):
+    """最近失败 PG 记忆摘要。"""
+
+    id: str
+    content: str = ""
+    error_msg: str | None = None
+    updated_at: datetime | None = None
+
+
+class MemoryQualityIssueResult(BaseModel):
+    """单条记忆质量问题样本。"""
+
+    category: str
+    severity: str = "info"
+    title: str
+    detail: str = ""
+    entity_ids: list[str] = Field(default_factory=list)
+    memory_ids: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryQualityIssueListResult(BaseModel):
+    """指定类别质量问题样本列表。"""
+
+    category: str
+    total: int = 0
+    items: list[MemoryQualityIssueResult] = Field(default_factory=list)
+
+
+class MemoryQualityOverviewResult(BaseModel):
+    """当前用户记忆质量审计总览。"""
+
+    generated_at: datetime = Field(default_factory=datetime.now)
+    pg_total: int = 0
+    pg_status_counts: dict[str, int] = Field(default_factory=dict)
+    recent_failed: list[MemoryQualityFailedMemoryResult] = Field(default_factory=list)
+    graph_available: bool = True
+    graph_counts: MemoryQualityGraphCountsResult = Field(
+        default_factory=MemoryQualityGraphCountsResult
+    )
+    issue_summary: MemoryQualityIssueSummaryResult = Field(
+        default_factory=MemoryQualityIssueSummaryResult
+    )
+
+
+class MemoryEntityDedupDecision(BaseModel):
+    """LLM 对两个候选实体是否为同一实体的保守判定。"""
+
+    same_entity: bool = False
+    canonical_idx: int = 0
+    confidence: float = 0
+    reason: str = ""
+
+
+class MemoryEntityDedupCandidate(BaseModel):
+    """进入 LLM 精判前的实体候选对。"""
+
+    left: EntityNode
+    right: EntityNode
+    name_similarity: float = 0
+    embedding_similarity: float = 0
+    name_contains: bool = False
+
+
+class MemoryEntityDedupResult(BaseModel):
+    """实体消歧后的实体映射和 ID 重定向信息。"""
+
+    entities: list[EntityNode] = Field(default_factory=list)
+    entity_by_idx: dict[int, EntityNode] = Field(default_factory=dict)
+    redirects: dict[str, str] = Field(default_factory=dict)
 
 
 class InsightNode(BaseModel):

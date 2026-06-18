@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
 from app.domain.models.memory_graph import EntityNode, MemoryGraphStats, StatementNode
+from app.domain.services.memory.entity_deduplicator import MemoryEntityDeduplicator
 from app.domain.services.memory.fact_extractor import (
     ExtractedEntity,
     ExtractedEvent,
@@ -320,6 +323,90 @@ async def test_memory_graph_extractor_redirects_event_participants_to_existing_e
     assert "existing-user-entity" in {edge.entity_id for edge in graph.involves}
 
 
+@pytest.mark.anyio
+async def test_memory_graph_extractor_redirects_fuzzy_batch_entities_in_relations_and_events():
+    fact_extractor = FakeFactExtractor(
+        statements=[
+            StatementNode(
+                id="statement-1",
+                user_id="user-a",
+                chunk_id="chunk-1",
+                index=0,
+                text="用户昨天去看了周杰倫演唱会。",
+            )
+        ],
+        triplets=ExtractedTriplets(
+            entities=[
+                ExtractedEntity(
+                    entity_idx=1,
+                    name="用户",
+                    type="生命体",
+                    description="当前用户",
+                ),
+                ExtractedEntity(
+                    entity_idx=2,
+                    name="周杰伦",
+                    type="生命体",
+                    description="歌手",
+                ),
+                ExtractedEntity(
+                    entity_idx=3,
+                    name="周杰倫",
+                    type="生命体",
+                    description="华语音乐人",
+                ),
+            ],
+            triplets=[
+                ExtractedTriplet(
+                    subject_id=1,
+                    predicate="参加",
+                    object_id=2,
+                    evidence="用户昨天去看了周杰倫演唱会。",
+                )
+            ],
+            events=[
+                ExtractedEvent(
+                    title="观看周杰倫演唱会",
+                    description="用户昨天去看了周杰倫演唱会",
+                    event_time="NULL",
+                    participants=["用户", "周杰倫"],
+                )
+            ],
+        ),
+    )
+    repository = FakeGraphRepository()
+    deduplicator = MemoryEntityDeduplicator(
+        llm=FakeDedupLLM(
+            {
+                "same_entity": True,
+                "canonical_idx": 2,
+                "confidence": 0.95,
+                "reason": "同一位歌手",
+            }
+        ),
+        json_parser=FakeJSONParser(),
+    )
+    extractor = MemoryGraphExtractor(
+        fact_extractor=fact_extractor,
+        embedding=FakeEmbedding(),
+        graph_repository=repository,
+        deduplicator=deduplicator,
+    )
+
+    await extractor.extract_memory(
+        memory_id="mem-fuzzy",
+        user_id="user-a",
+        content="用户昨天去看了周杰倫演唱会。",
+    )
+
+    graph = repository.saved_graphs[0]
+    singer_entities = [entity for entity in graph.entities if "周杰" in entity.name]
+    assert len(singer_entities) == 1
+    singer_entity = singer_entities[0]
+    assert graph.relations[0].target_entity_id == singer_entity.id
+    assert singer_entity.id in {edge.entity_id for edge in graph.involves}
+
+
 class FakeFactExtractor:
     def __init__(
         self, statements: list[StatementNode], triplets: ExtractedTriplets
@@ -358,3 +445,34 @@ class FakeGraphRepository:
 
     async def list_entities_by_type(self, user_id: str, entity_type: str):
         return self.existing_by_type.get(entity_type, [])
+
+
+class FakeDedupLLM:
+    def __init__(self, payload):
+        self._payload = payload
+
+    async def invoke(
+        self,
+        messages,
+        tools=None,
+        response_format=None,
+        tool_choice=None,
+    ):
+        return {"content": json.dumps(self._payload, ensure_ascii=False)}
+
+    @property
+    def model_name(self):
+        return "fake-llm"
+
+    @property
+    def temperature(self):
+        return 0
+
+    @property
+    def max_tokens(self):
+        return 1024
+
+
+class FakeJSONParser:
+    async def invoke(self, text, default_value=None):
+        return json.loads(text)

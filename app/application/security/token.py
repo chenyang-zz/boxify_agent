@@ -65,6 +65,7 @@ class TokenService:
             raise UnauthorizedError() from exc
 
     def _sign(self, signing_input: str) -> str:
+        """对 header.payload 进行 HMAC-SHA256 签名并返回 URL 安全文本。"""
         digest = hmac.new(
             self._secret_key, signing_input.encode("ascii"), hashlib.sha256
         ).digest()
@@ -72,18 +73,22 @@ class TokenService:
 
     @classmethod
     def _json_b64encode(cls, value: Dict[str, Any]) -> str:
+        """将 JSON 对象序列化为稳定顺序后做 base64url 编码。"""
         data = json.dumps(value, separators=(",", ":"), sort_keys=True).encode("utf-8")
         return cls._b64encode(data)
 
     @staticmethod
     def _json_b64decode(value: str) -> Dict[str, Any]:
+        """解码 base64url 文本并解析为 JSON 对象。"""
         return json.loads(TokenService._b64decode(value))
 
     @staticmethod
     def _b64encode(value: bytes) -> str:
+        """生成去掉填充符的 base64url 文本，匹配 JWT 编码规则。"""
         return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
     @staticmethod
     def _b64decode(value: str) -> bytes:
+        """补齐 base64url 填充符后解码为原始字节。"""
         padding = "=" * (-len(value) % 4)
         return base64.urlsafe_b64decode(f"{value}{padding}")

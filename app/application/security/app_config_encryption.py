@@ -76,14 +76,17 @@ class AppConfigEncryption:
         return data
 
     def _encrypt_json(self, value: Any) -> str:
+        """将结构化敏感配置压缩为 JSON 后整体加密。"""
         return self._encrypt_text(
             json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         )
 
     def _decrypt_json(self, value: str) -> Any:
+        """解密结构化敏感配置并还原为 JSON 对象。"""
         return json.loads(self._decrypt_text(value))
 
     def _encrypt_text(self, value: str) -> str:
+        """给明文加密并添加版本前缀，已加密文本保持幂等。"""
         if self._is_encrypted(value):
             return value
         assert self._fernet is not None
@@ -91,26 +94,31 @@ class AppConfigEncryption:
         return f"{self._prefix}{token}"
 
     def _decrypt_text(self, value: str) -> str:
+        """移除版本前缀并解密出原始明文。"""
         assert self._fernet is not None
         token = value.removeprefix(self._prefix)
         return self._fernet.decrypt(token.encode("utf-8")).decode("utf-8")
 
     @classmethod
     def _is_encrypted(cls, value: str) -> bool:
+        """判断文本是否已经使用当前配置加密格式存储。"""
         return value.startswith(cls._prefix)
 
     @staticmethod
     def _mcp_servers(app_config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """从应用配置字典中安全取得 MCP server 配置集合。"""
         mcp_config = app_config_data.get("mcp_config") or {}
         return mcp_config.get("mcpServers") or {}
 
     @staticmethod
     def _notebook_embedding_config(app_config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """确保 notebook embedding 配置路径存在并返回该配置字典。"""
         notebook_config = app_config_data.setdefault("notebook_config", {})
         return notebook_config.setdefault("embedding_config", {})
 
     @staticmethod
     def _normalize_key(encryption_key: str) -> bytes:
+        """兼容 Fernet 原生 key 和普通字符串 secret，统一转换为可用 key。"""
         key_bytes = encryption_key.encode("utf-8")
         try:
             Fernet(key_bytes)

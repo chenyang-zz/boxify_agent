@@ -1,7 +1,14 @@
 from datetime import datetime
 from typing import Self
 
-from sqlalchemy import Boolean, DateTime, PrimaryKeyConstraint, String, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    PrimaryKeyConstraint,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.models.user import User
@@ -12,11 +19,22 @@ class UserModel(Base):
     """用户ORM模型"""
 
     __tablename__ = "users"
-    __table_args__ = (PrimaryKeyConstraint("id", name="pk_users_id"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("id", name="pk_users_id"),
+        UniqueConstraint(
+            "oauth_provider",
+            "oauth_subject",
+            name="uq_users_oauth_provider_subject",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(255), nullable=False, primary_key=True)
     username: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    oauth_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )

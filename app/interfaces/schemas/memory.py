@@ -222,6 +222,78 @@ class MemoryProfileResponse(BaseModel):
     groups: list[MemoryProfileGroupResponse] = Field(default_factory=list)
 
 
+class MemoryQualityGraphCountsResponse(BaseModel):
+    """记忆质量审计图谱数量响应。"""
+
+    dialogues: int = 0
+    chunks: int = 0
+    statements: int = 0
+    entities: int = 0
+    relations: int = 0
+    events: int = 0
+    involves: int = 0
+    communities: int = 0
+    insights: int = 0
+
+
+class MemoryQualityIssueSummaryResponse(BaseModel):
+    """记忆质量审计问题摘要响应。"""
+
+    duplicate_entities: int = 0
+    missing_embeddings: int = 0
+    orphan_entities: int = 0
+    orphan_statements: int = 0
+    broken_relations: int = 0
+    expired_relations: int = 0
+    empty_communities: int = 0
+    orphan_insights: int = 0
+
+
+class MemoryQualityFailedMemoryResponse(BaseModel):
+    """记忆质量审计最近失败 PG 记忆响应。"""
+
+    id: str
+    content: str = ""
+    error_msg: str | None = None
+    updated_at: datetime | None = None
+
+
+class MemoryQualityIssueResponse(BaseModel):
+    """记忆质量审计问题样本响应。"""
+
+    category: str
+    severity: str = "info"
+    title: str
+    detail: str = ""
+    entity_ids: list[str] = Field(default_factory=list)
+    memory_ids: list[str] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class MemoryQualityIssueListResponse(BaseModel):
+    """记忆质量审计问题列表响应。"""
+
+    category: str
+    total: int = 0
+    items: list[MemoryQualityIssueResponse] = Field(default_factory=list)
+
+
+class MemoryQualityOverviewResponse(BaseModel):
+    """记忆质量审计总览响应。"""
+
+    generated_at: datetime
+    pg_total: int = 0
+    pg_status_counts: dict[str, int] = Field(default_factory=dict)
+    recent_failed: list[MemoryQualityFailedMemoryResponse] = Field(default_factory=list)
+    graph_available: bool = True
+    graph_counts: MemoryQualityGraphCountsResponse = Field(
+        default_factory=MemoryQualityGraphCountsResponse
+    )
+    issue_summary: MemoryQualityIssueSummaryResponse = Field(
+        default_factory=MemoryQualityIssueSummaryResponse
+    )
+
+
 class MemoryInsightResponse(BaseModel):
     """记忆洞察响应。"""
 

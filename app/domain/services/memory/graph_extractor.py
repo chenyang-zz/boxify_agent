@@ -20,6 +20,7 @@ from app.domain.services.memory.fact_extractor import (
     ExtractedTriplets,
     MemoryFactExtractor,
 )
+from app.domain.services.memory.entity_deduplicator import MemoryEntityDeduplicator
 from app.domain.services.memory.ontology import normalize_entity_type, normalize_predicate
 from app.utils.datetime import parse_optional_datetime
 
@@ -32,11 +33,13 @@ class MemoryGraphExtractor:
         fact_extractor: MemoryFactExtractor,
         embedding: EmbeddingModel,
         graph_repository: MemoryGraphRepository,
+        deduplicator: MemoryEntityDeduplicator | None = None,
         chunk_size: int = 1200,
     ) -> None:
         self._fact_extractor = fact_extractor
         self._embedding = embedding
         self._graph_repository = graph_repository
+        self._deduplicator = deduplicator
         self._chunk_size = chunk_size
 
     async def extract_memory(
@@ -155,16 +158,20 @@ class MemoryGraphExtractor:
         events, involves = self._build_events(
             dialogue=dialogue,
             entities=entities,
+            entity_by_idx=entity_by_idx,
             triplet_result=triplet_result,
         )
-        if entities:
+        entities_needing_embedding = [
+            entity for entity in entities if not entity.embedding
+        ]
+        if entities_needing_embedding:
             vectors = await self._embedding.embed(
                 [
                     f"{entity.name}\n{entity.type}\n{entity.description}"
-                    for entity in entities
+                    for entity in entities_needing_embedding
                 ]
             )
-            for entity, vector in zip(entities, vectors):
+            for entity, vector in zip(entities_needing_embedding, vectors):
                 entity.embedding = vector
 
         return MemoryGraph(
@@ -182,6 +189,7 @@ class MemoryGraphExtractor:
         self,
         dialogue: DialogueNode,
         entities: list[EntityNode],
+        entity_by_idx: dict[int, EntityNode],
         triplet_result: ExtractedTriplets,
     ) -> tuple[list[EventNode], list[InvolvesEdge]]:
         """把 LLM 事件输出转换为 Event 节点和 INVOLVES 边。"""
@@ -190,6 +198,11 @@ class MemoryGraphExtractor:
             for entity in entities
             if entity.name.strip()
         }
+        for extracted in triplet_result.entities:
+            entity = entity_by_idx.get(extracted.entity_idx)
+            name = extracted.name.strip()
+            if entity and name:
+                entity_by_name[name] = entity
         events: list[EventNode] = []
         involves: list[InvolvesEdge] = []
         for extracted in triplet_result.events:
@@ -238,6 +251,17 @@ class MemoryGraphExtractor:
         self, user_id: str, extracted_entities: list[ExtractedEntity]
     ) -> dict[int, EntityNode]:
         """归一化并去重本次抽取实体，再与图数据库已有实体融合。"""
+        if self._deduplicator:
+            entity_by_idx = self._build_raw_entities(user_id, extracted_entities)
+            await self._embed_entities(list(entity_by_idx.values()))
+            batch_result = await self._deduplicator.dedup_batch(entity_by_idx)
+            graph_result = await self._deduplicator.merge_with_graph(
+                user_id,
+                batch_result.entity_by_idx,
+                self._graph_repository,
+            )
+            return graph_result.entity_by_idx
+
         entity_by_key: dict[tuple[str, str], EntityNode] = {}
         entity_by_idx: dict[int, EntityNode] = {}
         for extracted in extracted_entities:
@@ -265,6 +289,49 @@ class MemoryGraphExtractor:
 
         await self._merge_entities_with_graph(user_id, list(entity_by_key.values()))
         return entity_by_idx
+
+    def _build_raw_entities(
+        self, user_id: str, extracted_entities: list[ExtractedEntity]
+    ) -> dict[int, EntityNode]:
+        """构造保留原始 entity_idx 的实体映射，供模糊消歧重定向。"""
+        entity_by_idx: dict[int, EntityNode] = {}
+        for extracted in extracted_entities:
+            name = extracted.name.strip()
+            if not name:
+                continue
+            entity_type = normalize_entity_type(extracted.type)
+            entity_by_idx[extracted.entity_idx] = EntityNode(
+                id=stable_memory_graph_id(
+                    user_id,
+                    "entity",
+                    name.lower(),
+                    entity_type.lower(),
+                ),
+                user_id=user_id,
+                name=name,
+                type=entity_type,
+                description=extracted.description.strip(),
+                importance=extracted.importance,
+                confidence=extracted.confidence,
+            )
+        return entity_by_idx
+
+    async def _embed_entities(self, entities: list[EntityNode]) -> None:
+        """为实体生成 embedding；同一 ID 只生成一次，失败语义保持向外抛出。"""
+        unique_entities = list({entity.id: entity for entity in entities}.values())
+        entities_needing_embedding = [
+            entity for entity in unique_entities if not entity.embedding
+        ]
+        if not entities_needing_embedding:
+            return
+        vectors = await self._embedding.embed(
+            [
+                f"{entity.name}\n{entity.type}\n{entity.description}"
+                for entity in entities_needing_embedding
+            ]
+        )
+        for entity, vector in zip(entities_needing_embedding, vectors):
+            entity.embedding = vector
 
     async def _merge_entities_with_graph(
         self, user_id: str, entities: list[EntityNode]

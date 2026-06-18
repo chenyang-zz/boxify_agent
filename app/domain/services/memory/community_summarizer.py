@@ -1,6 +1,3 @@
-import json
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.external.json_parser import JSONParser
@@ -14,6 +11,7 @@ from app.domain.services.prompts.memory import (
     COMMUNITY_SUMMARY_PROMPT,
     COMMUNITY_SUMMARY_SYSTEM_PROMPT,
 )
+from app.utils.json_utils import parse_json_object
 
 
 class _CommunitySummary(BaseModel):
@@ -51,23 +49,9 @@ class MemoryCommunitySummarizer:
             ],
             response_format={"type": "json_object"},
         )
-        parsed = await self._parse_json(response.get("content"), {})
+        parsed = await parse_json_object(self._json_parser, response.get("content"), {})
         result = _CommunitySummary.model_validate(parsed)
         return result.name.strip()[:10], result.summary.strip()[:80]
-
-    async def _parse_json(
-        self, content: Any, default_value: dict[str, Any]
-    ) -> dict[str, Any]:
-        """解析 LLM JSON，失败或非对象时返回默认值。"""
-        if not isinstance(content, str):
-            content = json.dumps(content, ensure_ascii=False)
-        try:
-            parsed = await self._json_parser.invoke(
-                content, default_value=default_value
-            )
-        except Exception:
-            return default_value
-        return parsed if isinstance(parsed, dict) else default_value
 
 
 def _format_members(

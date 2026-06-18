@@ -19,6 +19,12 @@ from app.domain.models.memory_graph import (
     MemoryProfileGroupResult,
     MemoryProfileRelationResult,
     MemoryProfileResult,
+    MemoryQualityFailedMemoryResult,
+    MemoryQualityGraphCountsResult,
+    MemoryQualityIssueListResult,
+    MemoryQualityIssueResult,
+    MemoryQualityIssueSummaryResult,
+    MemoryQualityOverviewResult,
     MemoryReflectStats,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
@@ -34,9 +40,15 @@ def test_memory_routes_require_token():
     client = TestClient(app)
 
     response = client.post("/api/memories", json={"content": "我喜欢周杰伦"})
+    quality_response = client.get("/api/memories/quality")
+    quality_issues_response = client.get(
+        "/api/memories/quality/issues?category=duplicate_entities"
+    )
 
     assert response.status_code == 401
     assert response.json()["code"] == 401
+    assert quality_response.status_code == 401
+    assert quality_issues_response.status_code == 401
 
 
 def test_create_and_search_memory_for_current_user(monkeypatch):
@@ -539,6 +551,95 @@ def test_memory_management_endpoints_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_memory_quality_endpoints_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeQualityMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    overview_response = client.get("/api/memories/quality", headers=headers)
+    issues_response = client.get(
+        "/api/memories/quality/issues?category=duplicate_entities&limit=50",
+        headers=headers,
+    )
+
+    assert overview_response.status_code == 200
+    assert overview_response.json()["data"] == {
+        "generated_at": "2026-06-18T10:00:00",
+        "pg_total": 3,
+        "pg_status_counts": {
+            "pending": 1,
+            "extracting": 0,
+            "completed": 1,
+            "failed": 1,
+        },
+        "recent_failed": [
+            {
+                "id": "memory-failed",
+                "content": "失败记忆",
+                "error_msg": "LLM timeout",
+                "updated_at": "2026-06-18T09:00:00",
+            }
+        ],
+        "graph_available": True,
+        "graph_counts": {
+            "dialogues": 1,
+            "chunks": 2,
+            "statements": 3,
+            "entities": 4,
+            "relations": 5,
+            "events": 6,
+            "involves": 7,
+            "communities": 8,
+            "insights": 9,
+        },
+        "issue_summary": {
+            "duplicate_entities": 2,
+            "missing_embeddings": 1,
+            "orphan_entities": 0,
+            "orphan_statements": 0,
+            "broken_relations": 1,
+            "expired_relations": 1,
+            "empty_communities": 0,
+            "orphan_insights": 0,
+        },
+    }
+    assert issues_response.status_code == 200
+    assert issues_response.json()["data"] == {
+        "category": "duplicate_entities",
+        "total": 1,
+        "items": [
+            {
+                "category": "duplicate_entities",
+                "severity": "info",
+                "title": "重复实体",
+                "detail": "用户/生命体 存在重复节点",
+                "entity_ids": ["entity-1", "entity-dup"],
+                "memory_ids": [],
+                "metadata": {"name": "用户", "type": "生命体", "count": 2},
+            }
+        ],
+    }
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -795,3 +896,61 @@ class FakeManagementMemoryService:
                 is_current=True,
             )
         ]
+
+
+class FakeQualityMemoryService:
+    async def quality(self):
+        return MemoryQualityOverviewResult(
+            generated_at="2026-06-18T10:00:00",
+            pg_total=3,
+            pg_status_counts={
+                "pending": 1,
+                "extracting": 0,
+                "completed": 1,
+                "failed": 1,
+            },
+            recent_failed=[
+                MemoryQualityFailedMemoryResult(
+                    id="memory-failed",
+                    content="失败记忆",
+                    error_msg="LLM timeout",
+                    updated_at="2026-06-18T09:00:00",
+                )
+            ],
+            graph_available=True,
+            graph_counts=MemoryQualityGraphCountsResult(
+                dialogues=1,
+                chunks=2,
+                statements=3,
+                entities=4,
+                relations=5,
+                events=6,
+                involves=7,
+                communities=8,
+                insights=9,
+            ),
+            issue_summary=MemoryQualityIssueSummaryResult(
+                duplicate_entities=2,
+                missing_embeddings=1,
+                broken_relations=1,
+                expired_relations=1,
+            ),
+        )
+
+    async def quality_issues(self, category, limit):
+        assert category == "duplicate_entities"
+        assert limit == 50
+        return MemoryQualityIssueListResult(
+            category=category,
+            total=1,
+            items=[
+                MemoryQualityIssueResult(
+                    category=category,
+                    severity="info",
+                    title="重复实体",
+                    detail="用户/生命体 存在重复节点",
+                    entity_ids=["entity-1", "entity-dup"],
+                    metadata={"name": "用户", "type": "生命体", "count": 2},
+                )
+            ],
+        )

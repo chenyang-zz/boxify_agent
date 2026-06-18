@@ -15,6 +15,7 @@ from app.application.services.auth_service import AuthService
 from app.application.services.document_service import DocumentService
 from app.application.services.file_service import FileService
 from app.application.services.memory_service import MemoryService
+from app.application.services.oauth import OAuthStateCodec, build_oauth_providers
 from app.application.services.session_service import SessionService
 from app.application.services.status_service import StatusService
 from app.application.services.tag_service import TagService
@@ -77,6 +78,20 @@ def get_auth_service() -> AuthService:
         uow_factory=get_uow,
         secret_key=settings.auth_secret_key,
         access_token_expire_minutes=settings.auth_access_token_expire_minutes,
+        oauth_providers=build_oauth_providers(
+            github_client_id=settings.github_oauth_client_id,
+            github_client_secret=settings.github_oauth_client_secret,
+            github_redirect_uri=settings.github_oauth_redirect_uri,
+            google_client_id=settings.google_oauth_client_id,
+            google_client_secret=settings.google_oauth_client_secret,
+            google_redirect_uri=settings.google_oauth_redirect_uri,
+            timeout_seconds=settings.oauth_http_timeout_seconds,
+        ),
+        oauth_state_codec=OAuthStateCodec(
+            secret_key=settings.auth_secret_key,
+            ttl_seconds=settings.oauth_state_ttl_seconds,
+        ),
+        oauth_frontend_redirect_uri=settings.oauth_frontend_redirect_uri,
     )
 
 
@@ -303,6 +318,7 @@ async def get_agent_service(
 async def _build_optional_memory_graph(
     user_id: str,
 ) -> tuple[MemoryGraphRepository | None, EmbeddingModel | None]:
+    """为 Agent 召回按用户组装图谱仓储和向量模型，失败时降级为空依赖。"""
     try:
         return build_memory_graph_repository(), await build_embedding_model(user_id)
     except Exception as e:

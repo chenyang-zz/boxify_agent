@@ -3,6 +3,7 @@ import pytest
 from app.domain.models.memory_graph import ChunkNode, StatementNode
 from app.domain.services.memory.fact_extractor import MemoryFactExtractor
 from app.domain.services.prompts.memory import (
+    DEDUP_ENTITY_PROMPT,
     EXTRACT_STATEMENTS_PROMPT,
     EXTRACT_TRIPLETS_PROMPT,
 )
@@ -37,6 +38,24 @@ def test_memory_graph_prompts_format_required_placeholders():
     assert "稳定画像/偏好/关系不落 Event" in triplets_prompt
     assert "生命体" in triplets_prompt
     assert "偏好" in triplets_prompt
+
+    dedup_prompt = DEDUP_ENTITY_PROMPT.format(
+        left_idx=1,
+        right_idx=2,
+        left_name="周杰伦",
+        left_type="生命体",
+        left_description="歌手",
+        right_name="周杰倫",
+        right_type="生命体",
+        right_description="华语音乐人",
+        name_similarity="0.900",
+        embedding_similarity="0.950",
+        name_contains="false",
+    )
+    assert "same_entity" in dedup_prompt
+    assert "canonical_idx" in dedup_prompt
+    assert "拿不准" in dedup_prompt
+    assert "低于 0.8 不会合并" in dedup_prompt
 
 
 @pytest.mark.anyio

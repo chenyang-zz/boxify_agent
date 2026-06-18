@@ -19,6 +19,7 @@ async def run_consolidate_memory(
 
 
 async def _run(user_id: str) -> MemoryConsolidationStats:
+    """Celery 内部异步入口，隔离同步任务包装和领域执行逻辑。"""
     return await run_consolidate_memory(user_id)
 
 

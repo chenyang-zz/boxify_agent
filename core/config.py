@@ -52,6 +52,24 @@ class Settings(BaseSettings):
     auth_secret_key: str = Field(default="change-me-in-development", repr=False)
     # Access token 有效期，单位为分钟
     auth_access_token_expire_minutes: int = 1440
+    # GitHub OAuth App Client ID
+    github_oauth_client_id: str = ""
+    # GitHub OAuth App Client Secret
+    github_oauth_client_secret: str = Field(default="", repr=False)
+    # GitHub OAuth回调地址，需与GitHub OAuth App配置一致
+    github_oauth_redirect_uri: str = ""
+    # Google OAuth Client ID
+    google_oauth_client_id: str = ""
+    # Google OAuth Client Secret
+    google_oauth_client_secret: str = Field(default="", repr=False)
+    # Google OAuth回调地址，需与Google Cloud Console配置一致
+    google_oauth_redirect_uri: str = ""
+    # OAuth state有效期，单位为秒
+    oauth_state_ttl_seconds: int = 600
+    # OAuth provider HTTP请求超时，单位为秒
+    oauth_http_timeout_seconds: float = 10
+    # OAuth登录成功后的前端回跳地址；为空时callback继续返回JSON
+    oauth_frontend_redirect_uri: str = ""
     # 首次启动时初始化管理员账号的用户名
     admin_username: str = ""
     # 首次启动时初始化管理员账号的密码，只用于 bootstrap
@@ -72,6 +90,16 @@ class Settings(BaseSettings):
     neo4j_password: str = Field(default="neo4j-password", repr=False)
     # Neo4j database 名称
     neo4j_database: str = "neo4j"
+
+    # 新写入记忆的实体模糊消歧阈值和 LLM 精判开关
+    # 名称相似度、向量相似度或包含关系达到该阈值后进入 LLM 精判
+    memory_dedup_similarity_threshold: float = 0.8
+    # LLM 消歧置信度达到该分数才合并实体
+    memory_dedup_merge_confidence: float = 0.8
+    # 单个实体最多送入 LLM 精判的候选数量
+    memory_dedup_max_candidates: int = 20
+    # 是否启用 LLM 模糊实体消歧；关闭时保留确定性同名同类型去重
+    memory_dedup_enable_llm: bool = True
 
     # 短期记忆提升为长期记忆的阈值，以及画像增强时处理的长期实体数量
     # 短期记忆被访问达到该次数后才允许提升为长期记忆

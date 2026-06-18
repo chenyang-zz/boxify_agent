@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.domain.models.long_term_memory import LongTermMemory
+from app.domain.models.memory_graph import MemoryQualityFailedMemoryResult
 
 
 class MemoryRepository(ABC):
@@ -38,4 +39,16 @@ class MemoryRepository(ABC):
     @abstractmethod
     async def delete_by_user(self, user_id: str, memory_id: str) -> bool:
         """删除用户记忆，返回是否删除成功。"""
+        ...
+
+    @abstractmethod
+    async def status_counts(self, user_id: str) -> dict[str, int]:
+        """统计当前用户各处理状态的长期记忆数量。"""
+        ...
+
+    @abstractmethod
+    async def recent_failed(
+        self, user_id: str, limit: int
+    ) -> list[MemoryQualityFailedMemoryResult]:
+        """读取当前用户最近失败的记忆摘要。"""
         ...

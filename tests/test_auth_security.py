@@ -5,6 +5,7 @@ import pytest
 from app.application.errors.exceptions import UnauthorizedError
 from app.application.security import PasswordHasher, TokenService
 from app.application.services.auth_service import AuthService
+from app.application.services.oauth import OAuthStateCodec
 from app.domain.models.user import User
 
 
@@ -27,6 +28,39 @@ def test_token_service_round_trips_subject_and_rejects_tampered_token():
     assert token_service.verify_access_token(token) == "user-1"
     with pytest.raises(UnauthorizedError):
         token_service.verify_access_token(f"{token}tampered")
+
+
+def test_oauth_state_codec_round_trips_and_rejects_tampered_state():
+    codec = OAuthStateCodec(secret_key="unit-test-secret")
+
+    state = codec.encode(
+        provider="google",
+        code_verifier="code-verifier",
+        nonce="nonce-value",
+    )
+
+    decoded = codec.decode(state, expected_provider="google")
+    assert decoded.provider == "google"
+    assert decoded.code_verifier == "code-verifier"
+    assert decoded.nonce == "nonce-value"
+    tampered_state = f"{state[:12]}A{state[13:]}"
+    with pytest.raises(UnauthorizedError) as exc_info:
+        codec.decode(tampered_state, expected_provider="google")
+    assert exc_info.value.msg == "OAuth登录状态无效或已过期"
+
+
+def test_oauth_state_codec_rejects_expired_state():
+    codec = OAuthStateCodec(secret_key="unit-test-secret", ttl_seconds=-1)
+
+    state = codec.encode(
+        provider="github",
+        code_verifier="code-verifier",
+        nonce=None,
+    )
+
+    with pytest.raises(UnauthorizedError) as exc_info:
+        codec.decode(state, expected_provider="github")
+    assert exc_info.value.msg == "OAuth登录状态无效或已过期"
 
 
 @pytest.mark.anyio

@@ -22,6 +22,7 @@ async def run_cluster_memory(
 
 
 async def _run(user_id: str, dialogue_id: str | None = None) -> MemoryCommunityClusterStats:
+    """初始化 worker 外部资源并执行单个用户的社区聚类。"""
     await get_postgres().init()
     await get_neo4j().init()
     try:

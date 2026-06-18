@@ -19,6 +19,10 @@ from app.domain.models.memory_graph import (
     MemoryProfileEntityResult,
     MemoryProfileRelationResult,
     MemoryPromotionStats,
+    MemoryQualityGraphCountsResult,
+    MemoryQualityIssueListResult,
+    MemoryQualityIssueResult,
+    MemoryQualityIssueSummaryResult,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -357,6 +361,7 @@ async def test_neo4j_repository_lists_existing_entities_by_type_for_dedup():
                 "name": "用户",
                 "type": "生命体",
                 "description": "当前用户",
+                "embedding": [0.1, 0.2],
             }
         ]
     )
@@ -375,6 +380,7 @@ async def test_neo4j_repository_lists_existing_entities_by_type_for_dedup():
             name="用户",
             type="生命体",
             description="当前用户",
+            embedding=[0.1, 0.2],
         )
     ]
     query, params = driver.executed[-1]
@@ -1007,6 +1013,141 @@ async def test_neo4j_repository_merges_duplicate_entities_in_single_transaction(
     assert "target.id <> $keeper_id" in executed_queries
     assert "source.id <> $keeper_id" in executed_queries
     assert "DETACH DELETE duplicate" in executed_queries
+    for _, params in driver.executed:
+        assert params["user_id"] == "user-a"
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_quality_counts_summary_and_issue_samples():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "RETURN dialogues, chunks, statements, entities": [
+                {
+                    "dialogues": 1,
+                    "chunks": 2,
+                    "statements": 3,
+                    "entities": 4,
+                    "relations": 5,
+                    "events": 6,
+                    "involves": 7,
+                    "communities": 8,
+                    "insights": 9,
+                }
+            ],
+            "RETURN duplicate_entities, missing_embeddings": [
+                {
+                    "duplicate_entities": 2,
+                    "missing_embeddings": 1,
+                    "orphan_entities": 3,
+                    "orphan_statements": 4,
+                    "broken_relations": 5,
+                    "expired_relations": 6,
+                    "empty_communities": 7,
+                    "orphan_insights": 8,
+                }
+            ],
+            "duplicate_entities' AS category": [
+                {
+                    "category": "duplicate_entities",
+                    "severity": "info",
+                    "title": "重复实体",
+                    "detail": "用户/生命体 存在 2 个同名节点",
+                    "entity_ids": ["entity-1", "entity-dup"],
+                    "memory_ids": [],
+                    "metadata": {"name": "用户", "type": "生命体", "count": 2},
+                }
+            ],
+            "broken_relations' AS category": [
+                {
+                    "category": "broken_relations",
+                    "severity": "warning",
+                    "title": "断裂关系",
+                    "detail": "关系 rel-1 缺少来源陈述",
+                    "entity_ids": ["entity-user", "entity-company"],
+                    "memory_ids": [],
+                    "metadata": {"relation_id": "rel-1", "predicate": "就职于"},
+                }
+            ],
+            "expired_relations' AS category": [
+                {
+                    "category": "expired_relations",
+                    "severity": "info",
+                    "title": "已失效关系",
+                    "detail": "关系 rel-old 已失效",
+                    "entity_ids": ["entity-user", "entity-old-company"],
+                    "memory_ids": [],
+                    "metadata": {
+                        "relation_id": "rel-old",
+                        "predicate": "就职于",
+                        "invalid_at": "2025-01-01T00:00:00",
+                    },
+                }
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    counts = await repository.quality_graph_counts("user-a")
+    summary = await repository.quality_issue_summary("user-a")
+    duplicate_issues = await repository.quality_issues(
+        "user-a", "duplicate_entities", limit=50
+    )
+    broken_issues = await repository.quality_issues(
+        "user-a", "broken_relations", limit=50
+    )
+    expired_issues = await repository.quality_issues(
+        "user-a", "expired_relations", limit=50
+    )
+
+    assert counts == MemoryQualityGraphCountsResult(
+        dialogues=1,
+        chunks=2,
+        statements=3,
+        entities=4,
+        relations=5,
+        events=6,
+        involves=7,
+        communities=8,
+        insights=9,
+    )
+    assert summary == MemoryQualityIssueSummaryResult(
+        duplicate_entities=2,
+        missing_embeddings=1,
+        orphan_entities=3,
+        orphan_statements=4,
+        broken_relations=5,
+        expired_relations=6,
+        empty_communities=7,
+        orphan_insights=8,
+    )
+    assert duplicate_issues == MemoryQualityIssueListResult(
+        category="duplicate_entities",
+        total=1,
+        items=[
+            MemoryQualityIssueResult(
+                category="duplicate_entities",
+                severity="info",
+                title="重复实体",
+                detail="用户/生命体 存在 2 个同名节点",
+                entity_ids=["entity-1", "entity-dup"],
+                memory_ids=[],
+                metadata={"name": "用户", "type": "生命体", "count": 2},
+            )
+        ],
+    )
+    assert broken_issues.items[0].severity == "warning"
+    assert expired_issues.items[0].metadata["invalid_at"] == "2025-01-01T00:00:00"
+    executed_queries = "\n".join(query for query, _ in driver.executed)
+    assert "MATCH (dialogue:Dialogue {user_id: $user_id})" in executed_queries
+    assert "toLower(entity.name) AS normalized_name" in executed_queries
+    assert "entity.type AS entity_type" in executed_queries
+    assert "relation.statement_id IS NULL" in executed_queries
+    assert "Statement {id: relation.statement_id, user_id: $user_id}" in executed_queries
+    assert "relation.invalid_at <= datetime()" in executed_queries
     for _, params in driver.executed:
         assert params["user_id"] == "user-a"
 

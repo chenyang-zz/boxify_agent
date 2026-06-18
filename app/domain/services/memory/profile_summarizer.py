@@ -1,6 +1,3 @@
-import json
-from typing import Any
-
 from app.domain.external.json_parser import JSONParser
 from app.domain.external.llm import LLM
 from app.domain.models.memory_graph import EntityNode
@@ -8,6 +5,7 @@ from app.domain.services.prompts.memory import (
     PROFILE_SUMMARY_PROMPT,
     PROFILE_SUMMARY_SYSTEM_PROMPT,
 )
+from app.utils.json_utils import parse_json_object
 
 
 class MemoryProfileSummarizer:
@@ -38,7 +36,8 @@ class MemoryProfileSummarizer:
             ],
             response_format={"type": "json_object"},
         )
-        parsed = await self._parse_json(
+        parsed = await parse_json_object(
+            self._json_parser,
             response.get("content"),
             default_value={"core_facts": [], "traits": []},
         )
@@ -46,18 +45,6 @@ class MemoryProfileSummarizer:
             _coerce_str_list(parsed.get("core_facts"), limit=8),
             _coerce_str_list(parsed.get("traits"), limit=8),
         )
-
-    async def _parse_json(self, content: Any, default_value: dict[str, Any]) -> dict[str, Any]:
-        """解析 LLM 返回内容，异常或非对象结果统一回退到默认结构。"""
-        if not isinstance(content, str):
-            content = json.dumps(content, ensure_ascii=False)
-        try:
-            parsed = await self._json_parser.invoke(content, default_value=default_value)
-        except Exception:
-            return default_value
-        if not isinstance(parsed, dict):
-            return default_value
-        return parsed
 
 
 def _coerce_str_list(value, limit: int) -> list[str]:

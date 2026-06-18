@@ -26,6 +26,17 @@ class DBUserRepository(UserRepository):
         record = result.scalar_one_or_none()
         return record.to_domain() if record else None
 
+    async def get_by_oauth_identity(
+        self, provider: str, subject: str
+    ) -> Optional[User]:
+        stmt = select(UserModel).where(
+            UserModel.oauth_provider == provider,
+            UserModel.oauth_subject == subject,
+        )
+        result = await self.db_session.execute(stmt)
+        record = result.scalar_one_or_none()
+        return record.to_domain() if record else None
+
     async def count(self) -> int:
         stmt = select(func.count()).select_from(UserModel)
         result = await self.db_session.execute(stmt)

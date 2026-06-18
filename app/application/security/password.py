@@ -49,9 +49,11 @@ class PasswordHasher:
 
     @staticmethod
     def _b64encode(value: bytes) -> str:
+        """生成去掉填充符的 base64url 文本，便于放入密码摘要。"""
         return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
     @staticmethod
     def _b64decode(value: str) -> bytes:
+        """补齐 base64url 填充符后还原密码摘要中的二进制片段。"""
         padding = "=" * (-len(value) % 4)
         return base64.urlsafe_b64decode(f"{value}{padding}")

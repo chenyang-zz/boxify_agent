@@ -23,6 +23,10 @@ from app.domain.models.memory_graph import (
     MemoryProfileRelationResult,
     MemoryProfileResult,
     MemoryPromotionStats,
+    MemoryQualityGraphCountsResult,
+    MemoryQualityIssueListResult,
+    MemoryQualityIssueResult,
+    MemoryQualityIssueSummaryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
 )
@@ -588,6 +592,93 @@ async def test_application_memory_service_merges_duplicate_entities():
 
 
 @pytest.mark.anyio
+async def test_application_memory_service_returns_quality_overview():
+    memory_repository = InMemoryMemoryRepository()
+    completed = LongTermMemory(user_id="user-a", content="完成记忆")
+    completed.mark_completed()
+    failed = LongTermMemory(user_id="user-a", content="失败记忆")
+    failed.mark_failed("LLM timeout")
+    other_user = LongTermMemory(user_id="user-b", content="其他用户")
+    other_user.mark_failed("should not leak")
+    await memory_repository.save(completed)
+    await memory_repository.save(failed)
+    await memory_repository.save(other_user)
+    repository = FakeQualityGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(memory_repository),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    quality = await service.quality()
+
+    assert quality.pg_total == 2
+    assert quality.pg_status_counts["completed"] == 1
+    assert quality.pg_status_counts["failed"] == 1
+    assert quality.recent_failed[0].id == failed.id
+    assert quality.recent_failed[0].error_msg == "LLM timeout"
+    assert quality.graph_available is True
+    assert quality.graph_counts.entities == 8
+    assert quality.issue_summary.duplicate_entities == 2
+    assert repository.calls == [
+        ("quality_graph_counts", "user-a"),
+        ("quality_issue_summary", "user-a"),
+    ]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_keeps_pg_quality_when_graph_unavailable():
+    memory_repository = InMemoryMemoryRepository()
+    failed = LongTermMemory(user_id="user-a", content="失败记忆")
+    failed.mark_failed("Neo4j unavailable")
+    await memory_repository.save(failed)
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(memory_repository),
+        user_id="user-a",
+        graph_repository=ExplodingQualityGraphRepository(),
+    )
+
+    quality = await service.quality()
+
+    assert quality.pg_total == 1
+    assert quality.pg_status_counts["failed"] == 1
+    assert quality.graph_available is False
+    assert quality.graph_counts.entities == 0
+    assert quality.issue_summary.broken_relations == 0
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_returns_quality_issue_samples():
+    repository = FakeQualityGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    issues = await service.quality_issues("duplicate_entities", limit=500)
+
+    assert issues.category == "duplicate_entities"
+    assert issues.total == 1
+    assert issues.items[0].entity_ids == ["entity-1", "entity-dup"]
+    assert repository.calls == [("quality_issues", "user-a", "duplicate_entities", 200)]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_rejects_unknown_quality_issue_category():
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(InMemoryMemoryRepository()),
+        user_id="user-a",
+        graph_repository=FakeQualityGraphRepository(),
+    )
+
+    with pytest.raises(BadRequestError) as exc:
+        await service.quality_issues("unknown", limit=50)
+
+    assert exc.value.msg == "未知质量问题类别"
+
+
+@pytest.mark.anyio
 async def test_memory_community_clusterer_is_available_for_service_layer():
     repository = FakeCommunityServiceGraphRepository()
     clusterer = MemoryCommunityClusterer(user_id="user-a", graph_repository=repository)
@@ -637,6 +728,31 @@ class InMemoryMemoryRepository:
             if not (memory.user_id == user_id and memory.id == memory_id)
         ]
         return len(self.saved) != before
+
+    async def status_counts(self, user_id: str):
+        counts = {status.value: 0 for status in MemoryStatus}
+        for memory in self.saved:
+            if memory.user_id == user_id:
+                counts[memory.status.value] += 1
+        return counts
+
+    async def recent_failed(self, user_id: str, limit: int):
+        from app.domain.models.memory_graph import MemoryQualityFailedMemoryResult
+
+        failed = [
+            memory
+            for memory in self.saved
+            if memory.user_id == user_id and memory.status == MemoryStatus.FAILED
+        ]
+        return [
+            MemoryQualityFailedMemoryResult(
+                id=memory.id,
+                content=memory.content,
+                error_msg=memory.error_msg,
+                updated_at=memory.updated_at,
+            )
+            for memory in failed[:limit]
+        ]
 
 
 class FakeTaskDispatcher:
@@ -947,6 +1063,56 @@ class FakeMemoryManagementGraphRepository(FakeGraphRepository):
     async def merge_duplicate_entities(self, user_id):
         self.calls.append(("merge_duplicate_entities", user_id))
         return MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
+
+
+class FakeQualityGraphRepository(FakeGraphRepository):
+    def __init__(self):
+        super().__init__([])
+        self.calls = []
+
+    async def quality_graph_counts(self, user_id):
+        self.calls.append(("quality_graph_counts", user_id))
+        return MemoryQualityGraphCountsResult(
+            dialogues=2,
+            chunks=3,
+            statements=4,
+            entities=8,
+            relations=6,
+            events=1,
+            involves=2,
+            communities=1,
+            insights=1,
+        )
+
+    async def quality_issue_summary(self, user_id):
+        self.calls.append(("quality_issue_summary", user_id))
+        return MemoryQualityIssueSummaryResult(
+            duplicate_entities=2,
+            missing_embeddings=1,
+            broken_relations=1,
+        )
+
+    async def quality_issues(self, user_id, category, limit):
+        self.calls.append(("quality_issues", user_id, category, limit))
+        return MemoryQualityIssueListResult(
+            category=category,
+            total=1,
+            items=[
+                MemoryQualityIssueResult(
+                    category=category,
+                    severity="info",
+                    title="重复实体",
+                    detail="用户/生命体 存在重复节点",
+                    entity_ids=["entity-1", "entity-dup"],
+                    metadata={"name": "用户", "type": "生命体", "count": 2},
+                )
+            ],
+        )
+
+
+class ExplodingQualityGraphRepository(FakeQualityGraphRepository):
+    async def quality_graph_counts(self, user_id):
+        raise RuntimeError("neo4j unavailable")
 
 
 class FakeProfileSummarizer:

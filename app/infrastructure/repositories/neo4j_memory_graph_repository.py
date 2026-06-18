@@ -19,6 +19,10 @@ from app.domain.models.memory_graph import (
     MemoryProfileEntityResult,
     MemoryProfileRelationResult,
     MemoryPromotionStats,
+    MemoryQualityGraphCountsResult,
+    MemoryQualityIssueListResult,
+    MemoryQualityIssueResult,
+    MemoryQualityIssueSummaryResult,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -142,7 +146,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                entity.last_access_at AS last_access_at,
                coalesce(entity.memory_layer, 'short_term') AS memory_layer,
                coalesce(entity.core_facts, []) AS core_facts,
-               coalesce(entity.traits, []) AS traits
+               coalesce(entity.traits, []) AS traits,
+               coalesce(entity.embedding, []) AS embedding
         """
         async with self._driver.session(database=self._database) as session:
             result = await session.run(
@@ -984,6 +989,150 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             rows = await result.data()
         return int((rows[0] if rows else {}).get("deleted") or 0) > 0
 
+    async def quality_graph_counts(
+        self, user_id: str
+    ) -> MemoryQualityGraphCountsResult:
+        """统计当前用户图谱节点和关系数量。"""
+        cypher = """
+        CALL {
+          MATCH (dialogue:Dialogue {user_id: $user_id})
+          RETURN count(dialogue) AS dialogues
+        }
+        CALL {
+          MATCH (chunk:Chunk {user_id: $user_id})
+          RETURN count(chunk) AS chunks
+        }
+        CALL {
+          MATCH (statement:Statement {user_id: $user_id})
+          RETURN count(statement) AS statements
+        }
+        CALL {
+          MATCH (entity:Entity {user_id: $user_id})
+          RETURN count(entity) AS entities
+        }
+        CALL {
+          MATCH (:Entity {user_id: $user_id})
+              -[relation:RELATION {user_id: $user_id}]->
+              (:Entity {user_id: $user_id})
+          RETURN count(relation) AS relations
+        }
+        CALL {
+          MATCH (event:Event {user_id: $user_id})
+          RETURN count(event) AS events
+        }
+        CALL {
+          MATCH (:Event {user_id: $user_id})
+              -[involves:INVOLVES {user_id: $user_id}]->
+              (:Entity {user_id: $user_id})
+          RETURN count(involves) AS involves
+        }
+        CALL {
+          MATCH (community:Community {user_id: $user_id})
+          RETURN count(community) AS communities
+        }
+        CALL {
+          MATCH (insight:Insight {user_id: $user_id})
+          RETURN count(insight) AS insights
+        }
+        RETURN dialogues, chunks, statements, entities, relations,
+               events, involves, communities, insights
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return MemoryQualityGraphCountsResult.model_validate(rows[0] if rows else {})
+
+    async def quality_issue_summary(
+        self, user_id: str
+    ) -> MemoryQualityIssueSummaryResult:
+        """统计当前用户图谱质量问题摘要。"""
+        cypher = """
+        CALL {
+          MATCH (entity:Entity {user_id: $user_id})
+          WITH toLower(entity.name) AS normalized_name,
+               entity.type AS entity_type,
+               count(entity) AS count
+          WHERE normalized_name <> '' AND count > 1
+          RETURN count(*) AS duplicate_entities
+        }
+        CALL {
+          MATCH (entity:Entity {user_id: $user_id})
+          WHERE entity.embedding IS NULL OR size(entity.embedding) = 0
+          RETURN count(entity) AS missing_embeddings
+        }
+        CALL {
+          MATCH (entity:Entity {user_id: $user_id})
+          WHERE NOT EXISTS {
+            MATCH (:Statement {user_id: $user_id})
+                -[:MENTIONS {user_id: $user_id}]->(entity)
+          }
+          RETURN count(entity) AS orphan_entities
+        }
+        CALL {
+          MATCH (statement:Statement {user_id: $user_id})
+          WHERE NOT EXISTS {
+            MATCH (statement)-[:MENTIONS {user_id: $user_id}]->
+                (:Entity {user_id: $user_id})
+          }
+          RETURN count(statement) AS orphan_statements
+        }
+        CALL {
+          MATCH (:Entity {user_id: $user_id})
+              -[relation:RELATION {user_id: $user_id}]->
+              (:Entity {user_id: $user_id})
+          WHERE relation.statement_id IS NULL OR NOT EXISTS {
+            MATCH (:Statement {id: relation.statement_id, user_id: $user_id})
+          }
+          RETURN count(relation) AS broken_relations
+        }
+        CALL {
+          MATCH (:Entity {user_id: $user_id})
+              -[relation:RELATION {user_id: $user_id}]->
+              (:Entity {user_id: $user_id})
+          WHERE relation.invalid_at IS NOT NULL
+            AND relation.invalid_at <= datetime()
+          RETURN count(relation) AS expired_relations
+        }
+        CALL {
+          MATCH (community:Community {user_id: $user_id})
+          WHERE NOT EXISTS {
+            MATCH (:Entity {user_id: $user_id})
+                -[:IN_COMMUNITY {user_id: $user_id}]->(community)
+          }
+          RETURN count(community) AS empty_communities
+        }
+        CALL {
+          MATCH (insight:Insight {user_id: $user_id})
+          WHERE NOT EXISTS {
+            MATCH (insight)-[:DERIVED_FROM {user_id: $user_id}]->
+                (:Entity {user_id: $user_id})
+          }
+          RETURN count(insight) AS orphan_insights
+        }
+        RETURN duplicate_entities, missing_embeddings, orphan_entities,
+               orphan_statements, broken_relations, expired_relations,
+               empty_communities, orphan_insights
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        return MemoryQualityIssueSummaryResult.model_validate(rows[0] if rows else {})
+
+    async def quality_issues(
+        self, user_id: str, category: str, limit: int
+    ) -> MemoryQualityIssueListResult:
+        """读取当前用户指定质量问题类别样本。"""
+        cypher = self._quality_issue_query(category)
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id, limit=limit)
+            rows = await result.data()
+        items = [self._row_to_quality_issue(row) for row in rows]
+        return MemoryQualityIssueListResult(
+            category=category,
+            total=len(items),
+            items=items,
+        )
+
     async def merge_duplicate_entities(
         self, user_id: str
     ) -> MemoryMergeDuplicatesResult:
@@ -1358,6 +1507,170 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         return unique
 
     @staticmethod
+    def _quality_issue_query(category: str) -> str:
+        """按审计类别返回样本查询。"""
+        queries = {
+            "duplicate_entities": """
+                MATCH (entity:Entity {user_id: $user_id})
+                WITH toLower(entity.name) AS normalized_name,
+                     entity.type AS entity_type,
+                     collect(entity) AS entities,
+                     count(entity) AS count
+                WHERE normalized_name <> '' AND count > 1
+                RETURN 'duplicate_entities' AS category,
+                       'info' AS severity,
+                       '重复实体' AS title,
+                       coalesce(entities[0].name, normalized_name) + '/'
+                         + coalesce(entity_type, '其他')
+                         + ' 存在 ' + toString(count) + ' 个同名节点' AS detail,
+                       [entity IN entities | entity.id] AS entity_ids,
+                       [] AS memory_ids,
+                       {
+                         name: coalesce(entities[0].name, normalized_name),
+                         type: coalesce(entity_type, '其他'),
+                         count: count
+                       } AS metadata
+                ORDER BY count DESC
+                LIMIT $limit
+            """,
+            "missing_embeddings": """
+                MATCH (entity:Entity {user_id: $user_id})
+                WHERE entity.embedding IS NULL OR size(entity.embedding) = 0
+                RETURN 'missing_embeddings' AS category,
+                       'info' AS severity,
+                       '实体缺少 embedding' AS title,
+                       entity.name + '/' + coalesce(entity.type, '其他')
+                         + ' 缺少向量' AS detail,
+                       [entity.id] AS entity_ids,
+                       [] AS memory_ids,
+                       {name: entity.name, type: entity.type} AS metadata
+                ORDER BY coalesce(entity.importance, 0.5) DESC
+                LIMIT $limit
+            """,
+            "orphan_entities": """
+                MATCH (entity:Entity {user_id: $user_id})
+                WHERE NOT EXISTS {
+                  MATCH (:Statement {user_id: $user_id})
+                      -[:MENTIONS {user_id: $user_id}]->(entity)
+                }
+                RETURN 'orphan_entities' AS category,
+                       'warning' AS severity,
+                       '实体缺少 MENTIONS 溯源' AS title,
+                       entity.name + '/' + coalesce(entity.type, '其他')
+                         + ' 没有陈述来源' AS detail,
+                       [entity.id] AS entity_ids,
+                       [] AS memory_ids,
+                       {name: entity.name, type: entity.type} AS metadata
+                ORDER BY coalesce(entity.importance, 0.5) DESC
+                LIMIT $limit
+            """,
+            "orphan_statements": """
+                MATCH (statement:Statement {user_id: $user_id})
+                WHERE NOT EXISTS {
+                  MATCH (statement)-[:MENTIONS {user_id: $user_id}]->
+                      (:Entity {user_id: $user_id})
+                }
+                OPTIONAL MATCH (statement)<-[:HAS_STATEMENT]-(:Chunk {user_id: $user_id})
+                    <-[:HAS_CHUNK]-(dialogue:Dialogue {user_id: $user_id})
+                WITH statement, collect(DISTINCT dialogue.memory_id) AS memory_ids
+                RETURN 'orphan_statements' AS category,
+                       'warning' AS severity,
+                       '陈述缺少实体提及' AS title,
+                       statement.text AS detail,
+                       [] AS entity_ids,
+                       [id IN memory_ids WHERE id IS NOT NULL] AS memory_ids,
+                       {statement_id: statement.id} AS metadata
+                ORDER BY coalesce(statement.importance, 0.5) DESC
+                LIMIT $limit
+            """,
+            "broken_relations": """
+                MATCH (source:Entity {user_id: $user_id})
+                    -[relation:RELATION {user_id: $user_id}]->
+                    (target:Entity {user_id: $user_id})
+                WHERE relation.statement_id IS NULL OR NOT EXISTS {
+                  MATCH (:Statement {id: relation.statement_id, user_id: $user_id})
+                }
+                RETURN 'broken_relations' AS category,
+                       'warning' AS severity,
+                       '断裂关系' AS title,
+                       '关系 ' + relation.id + ' 缺少来源陈述' AS detail,
+                       [source.id, target.id] AS entity_ids,
+                       [] AS memory_ids,
+                       {
+                         relation_id: relation.id,
+                         predicate: relation.name,
+                         statement_id: relation.statement_id
+                       } AS metadata
+                ORDER BY coalesce(relation.importance, 0.5) DESC
+                LIMIT $limit
+            """,
+            "expired_relations": """
+                MATCH (source:Entity {user_id: $user_id})
+                    -[relation:RELATION {user_id: $user_id}]->
+                    (target:Entity {user_id: $user_id})
+                WHERE relation.invalid_at IS NOT NULL
+                  AND relation.invalid_at <= datetime()
+                RETURN 'expired_relations' AS category,
+                       'info' AS severity,
+                       '已失效关系' AS title,
+                       '关系 ' + relation.id + ' 已失效' AS detail,
+                       [source.id, target.id] AS entity_ids,
+                       [] AS memory_ids,
+                       {
+                         relation_id: relation.id,
+                         predicate: relation.name,
+                         valid_at: toString(relation.valid_at),
+                         invalid_at: toString(relation.invalid_at)
+                       } AS metadata
+                ORDER BY relation.invalid_at DESC
+                LIMIT $limit
+            """,
+            "empty_communities": """
+                MATCH (community:Community {user_id: $user_id})
+                WHERE NOT EXISTS {
+                  MATCH (:Entity {user_id: $user_id})
+                      -[:IN_COMMUNITY {user_id: $user_id}]->(community)
+                }
+                RETURN 'empty_communities' AS category,
+                       'info' AS severity,
+                       '空社区' AS title,
+                       coalesce(community.name, community.id) + ' 没有成员实体' AS detail,
+                       [] AS entity_ids,
+                       [] AS memory_ids,
+                       {
+                         community_id: community.id,
+                         name: community.name,
+                         member_count: coalesce(community.member_count, 0)
+                       } AS metadata
+                ORDER BY coalesce(community.updated_at, community.created_at) DESC
+                LIMIT $limit
+            """,
+            "orphan_insights": """
+                MATCH (insight:Insight {user_id: $user_id})
+                WHERE NOT EXISTS {
+                  MATCH (insight)-[:DERIVED_FROM {user_id: $user_id}]->
+                      (:Entity {user_id: $user_id})
+                }
+                RETURN 'orphan_insights' AS category,
+                       'warning' AS severity,
+                       '洞察缺少 DERIVED_FROM 溯源' AS title,
+                       insight.theme AS detail,
+                       [] AS entity_ids,
+                       [] AS memory_ids,
+                       {
+                         insight_id: insight.id,
+                         theme: insight.theme,
+                         source_count: coalesce(insight.source_count, 0)
+                       } AS metadata
+                ORDER BY coalesce(insight.importance, 0.6) DESC
+                LIMIT $limit
+            """,
+        }
+        if category not in queries:
+            raise ValueError(f"unknown memory quality issue category: {category}")
+        return queries[category]
+
+    @staticmethod
     async def _merge_graph(tx, params: dict[str, Any]) -> None:
         """将完整记忆图谱以 MERGE 方式幂等写入 Neo4j。"""
         await tx.run(
@@ -1654,6 +1967,27 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
+    def _row_to_quality_issue(row: dict[str, Any]) -> MemoryQualityIssueResult:
+        """把 Neo4j 行转换为质量审计问题项。"""
+        return MemoryQualityIssueResult(
+            category=str(row.get("category") or ""),
+            severity=str(row.get("severity") or "info"),
+            title=str(row.get("title") or ""),
+            detail=str(row.get("detail") or ""),
+            entity_ids=[
+                str(entity_id)
+                for entity_id in row.get("entity_ids") or []
+                if entity_id
+            ],
+            memory_ids=[
+                str(memory_id)
+                for memory_id in row.get("memory_ids") or []
+                if memory_id
+            ],
+            metadata=row.get("metadata") or {},
+        )
+
+    @staticmethod
     def _row_to_entity_node(row: dict[str, Any], user_id: str) -> EntityNode:
         """把 Neo4j 实体行转换为领域实体节点模型。"""
         return EntityNode(
@@ -1670,6 +2004,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             memory_layer=str(row.get("memory_layer") or "short_term"),
             core_facts=row.get("core_facts") or [],
             traits=row.get("traits") or [],
+            embedding=[
+                float(value)
+                for value in row.get("embedding") or []
+            ],
         )
 
     @staticmethod

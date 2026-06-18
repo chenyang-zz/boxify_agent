@@ -17,6 +17,8 @@ from app.interfaces.schemas.memory import (
     MemoryInsightResponse,
     MemoryMergeDuplicatesResponse,
     MemoryProfileResponse,
+    MemoryQualityIssueListResponse,
+    MemoryQualityOverviewResponse,
     MemoryReflectResponse,
     MemoryRelationHistoryResponse,
     MemoryResponse,
@@ -312,6 +314,40 @@ async def merge_duplicate_memory_entities(
     return Response.success(
         msg="重复实体合并完成",
         data=MemoryMergeDuplicatesResponse.model_validate(stats.model_dump()),
+    )
+
+
+@router.get(
+    "/quality",
+    response_model=Response[MemoryQualityOverviewResponse],
+    summary="查询记忆质量总览",
+    description="查询当前用户 PG 记忆任务状态和图谱质量审计摘要。",
+)
+async def get_memory_quality(
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户记忆质量审计总览。"""
+    quality = await memory_service.quality()
+    return Response.success(
+        data=MemoryQualityOverviewResponse.model_validate(quality.model_dump())
+    )
+
+
+@router.get(
+    "/quality/issues",
+    response_model=Response[MemoryQualityIssueListResponse],
+    summary="查询记忆质量问题样本",
+    description="按类别查询当前用户记忆质量问题样本。",
+)
+async def list_memory_quality_issues(
+    category: str = Query(...),
+    limit: int = Query(default=50, ge=1, le=200),
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户指定类别记忆质量问题样本。"""
+    issues = await memory_service.quality_issues(category, limit=limit)
+    return Response.success(
+        data=MemoryQualityIssueListResponse.model_validate(issues.model_dump())
     )
 
 
