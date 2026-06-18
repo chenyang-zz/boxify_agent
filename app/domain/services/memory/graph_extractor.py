@@ -21,6 +21,7 @@ from app.domain.services.memory.fact_extractor import (
     MemoryFactExtractor,
 )
 from app.domain.services.memory.ontology import normalize_entity_type, normalize_predicate
+from app.utils.datetime import parse_optional_datetime
 
 
 class MemoryGraphExtractor:
@@ -55,10 +56,14 @@ class MemoryGraphExtractor:
             created_at=dialog_at,
         )
         chunks = self._chunk_text(user_id, dialogue.id, content)
-        statements = await self._fact_extractor.extract_statements(chunks)
+        dialog_at_text = dialog_at.isoformat()
+        statements = await self._fact_extractor.extract_statements(
+            chunks,
+            dialog_at=dialog_at_text,
+        )
         triplets = await self._fact_extractor.extract_triplets(
             statements,
-            dialog_at=dialog_at.isoformat(),
+            dialog_at=dialog_at_text,
         )
         graph = await self._build_graph(dialogue, chunks, statements, triplets)
         await self._graph_repository.save_graph(graph)
@@ -109,6 +114,8 @@ class MemoryGraphExtractor:
             statement = statement_by_text.get(triplet.evidence, fallback_statement)
             if not statement:
                 continue
+            valid_at = parse_optional_datetime(triplet.valid_at)
+            invalid_at = parse_optional_datetime(triplet.invalid_at)
             for entity in (head, tail):
                 mention_key = (statement.id, entity.id)
                 mentions_by_key.setdefault(
@@ -139,6 +146,8 @@ class MemoryGraphExtractor:
                     evidence=triplet.evidence or statement.text,
                     importance=triplet.importance,
                     confidence=triplet.confidence,
+                    valid_at=valid_at or statement.valid_at,
+                    invalid_at=invalid_at or statement.invalid_at,
                 )
             )
 
@@ -187,7 +196,7 @@ class MemoryGraphExtractor:
             title = extracted.title.strip()
             if not title:
                 continue
-            event_time = self._parse_event_time(extracted.event_time)
+            event_time = parse_optional_datetime(extracted.event_time)
             event = EventNode(
                 id=stable_memory_graph_id(
                     dialogue.user_id,
@@ -224,19 +233,6 @@ class MemoryGraphExtractor:
                 )
             events.append(event)
         return events, involves
-
-    @staticmethod
-    def _parse_event_time(value: str | None) -> datetime | None:
-        """解析 LLM 输出的事件时间，无法解析时返回空。"""
-        if not value:
-            return None
-        normalized = value.strip()
-        if not normalized or normalized.upper() == "NULL":
-            return None
-        try:
-            return datetime.fromisoformat(normalized.replace("Z", "+00:00"))
-        except ValueError:
-            return None
 
     async def _build_entities(
         self, user_id: str, extracted_entities: list[ExtractedEntity]

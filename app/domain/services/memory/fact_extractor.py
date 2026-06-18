@@ -12,6 +12,7 @@ from app.domain.services.prompts.memory import (
     EXTRACT_TRIPLETS_PROMPT,
     EXTRACT_TRIPLETS_SYSTEM_PROMPT,
 )
+from app.utils.datetime import parse_optional_datetime
 
 
 class ExtractedEntity(BaseModel):
@@ -38,6 +39,8 @@ class ExtractedTriplet(BaseModel):
     evidence: str
     importance: float = 0.5
     confidence: float = 0.8
+    valid_at: str | None = None
+    invalid_at: str | None = None
 
 
 class ExtractedEvent(BaseModel):
@@ -62,6 +65,8 @@ class ExtractedStatement(BaseModel):
     has_unsolved_reference: bool = False
     importance: float = 0.5
     confidence: float = 0.8
+    valid_at: str | None = None
+    invalid_at: str | None = None
 
 
 class ExtractedTriplets(BaseModel):
@@ -83,9 +88,12 @@ class MemoryFactExtractor:
         self._llm = llm
         self._json_parser = json_parser
 
-    async def extract_statements(self, chunks: list[ChunkNode]) -> list[StatementNode]:
+    async def extract_statements(
+        self, chunks: list[ChunkNode], dialog_at: str | None = None
+    ) -> list[StatementNode]:
         """从文本分块中抽取结构化原子陈述。"""
         statements: list[StatementNode] = []
+        parsed_dialog_at = parse_optional_datetime(dialog_at)
         for chunk in chunks:
             response = await self._llm.invoke(
                 messages=[
@@ -95,7 +103,10 @@ class MemoryFactExtractor:
                     },
                     {
                         "role": "user",
-                        "content": EXTRACT_STATEMENTS_PROMPT.format(text=chunk.text),
+                        "content": EXTRACT_STATEMENTS_PROMPT.format(
+                            text=chunk.text,
+                            dialog_at=dialog_at or "NULL",
+                        ),
                     },
                 ],
                 response_format={"type": "json_object"},
@@ -109,6 +120,13 @@ class MemoryFactExtractor:
                 if not text:
                     continue
                 index = len(statements)
+                valid_at = parse_optional_datetime(statement.valid_at)
+                invalid_at = parse_optional_datetime(statement.invalid_at)
+                if (
+                    valid_at is None
+                    and statement.temporal_type.upper() == "DYNAMIC"
+                ):
+                    valid_at = parsed_dialog_at
                 statements.append(
                     StatementNode(
                         id=stable_memory_graph_id(
@@ -122,6 +140,8 @@ class MemoryFactExtractor:
                         temporal_type=statement.temporal_type,
                         importance=statement.importance,
                         confidence=statement.confidence,
+                        valid_at=valid_at,
+                        invalid_at=invalid_at,
                     )
                 )
         return statements

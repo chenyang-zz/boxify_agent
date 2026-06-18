@@ -18,6 +18,7 @@ from app.interfaces.schemas.memory import (
     MemoryMergeDuplicatesResponse,
     MemoryProfileResponse,
     MemoryReflectResponse,
+    MemoryRelationHistoryResponse,
     MemoryResponse,
     MemorySearchRequest,
     MemoryTimelineEventResponse,
@@ -274,6 +275,27 @@ async def delete_memory_entity(
     """删除当前用户指定记忆实体。"""
     await memory_service.delete_entity(entity_id)
     return Response.success(msg="删除成功")
+
+
+@router.get(
+    "/entities/{entity_id}/relations/history",
+    response_model=Response[list[MemoryRelationHistoryResponse]],
+    summary="查询记忆实体关系历史",
+    description="查询当前用户指定实体的一跳关系历史事实。",
+)
+async def get_memory_entity_relation_history(
+    entity_id: str,
+    predicate: str | None = Query(default=None),
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户指定实体一跳关系历史。"""
+    relations = await memory_service.relation_history(entity_id, predicate=predicate)
+    return Response.success(
+        data=[
+            MemoryRelationHistoryResponse.model_validate(relation.model_dump())
+            for relation in relations
+        ]
+    )
 
 
 @router.post(

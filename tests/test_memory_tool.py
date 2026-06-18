@@ -69,6 +69,7 @@ async def test_memory_tool_searches_user_long_term_memories():
                         "neighbor_name": "用户",
                         "neighbor_type": "Person",
                         "evidence": "用户喜欢周杰伦的歌",
+                        "is_current": True,
                     }
                 ],
                 "source_memory_summary": "用户喜欢周杰伦",

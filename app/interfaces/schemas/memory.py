@@ -87,6 +87,9 @@ class MemoryCommunityRelationResponse(BaseModel):
     target_name: str
     name: str
     evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryCommunityDetailResponse(BaseModel):
@@ -138,6 +141,9 @@ class MemoryGraphEdgeResponse(BaseModel):
     target: str
     predicate: str
     evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryGraphViewResponse(BaseModel):
@@ -164,6 +170,24 @@ class MemoryProfileRelationResponse(BaseModel):
     target_name: str | None = None
     target_type: str | None = None
     evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
+
+
+class MemoryRelationHistoryResponse(BaseModel):
+    """记忆实体关系历史响应。"""
+
+    relation_id: str
+    direction: str
+    neighbor_entity_id: str
+    neighbor_name: str
+    neighbor_type: str
+    predicate: str
+    evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryProfileEntityResponse(BaseModel):

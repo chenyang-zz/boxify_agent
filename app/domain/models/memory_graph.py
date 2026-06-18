@@ -41,6 +41,8 @@ class StatementNode(BaseModel):
     temporal_type: str = "STATIC"
     importance: float = 0.5
     confidence: float = 0.8
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
     access_count: int = 0
     last_access_at: datetime | None = None
     memory_layer: str = "short_term"
@@ -120,6 +122,8 @@ class RelationEdge(BaseModel):
     evidence: str
     importance: float = 0.5
     confidence: float = 0.8
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
     access_count: int = 0
     last_access_at: datetime | None = None
     memory_layer: str = "short_term"
@@ -283,6 +287,9 @@ class CommunityRelationResult(BaseModel):
     target_name: str
     name: str
     evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryTimelineParticipantResult(BaseModel):
@@ -327,6 +334,9 @@ class MemoryGraphEdgeResult(BaseModel):
     target: str
     predicate: str
     evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryGraphViewResult(BaseModel):
@@ -353,6 +363,24 @@ class MemoryProfileRelationResult(BaseModel):
     target_name: str | None = None
     target_type: str | None = None
     evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
+
+
+class MemoryRelationHistoryResult(BaseModel):
+    """单个实体的一跳关系历史事实。"""
+
+    relation_id: str
+    direction: str
+    neighbor_entity_id: str
+    neighbor_name: str
+    neighbor_type: str
+    predicate: str
+    evidence: str = ""
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryProfileEntityResult(BaseModel):
@@ -395,6 +423,9 @@ class GraphRelationFact(BaseModel):
     neighbor_name: str
     neighbor_type: str
     evidence: str
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
 
 
 class MemoryGraphResult(BaseModel):

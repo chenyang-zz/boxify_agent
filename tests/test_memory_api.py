@@ -20,6 +20,7 @@ from app.domain.models.memory_graph import (
     MemoryProfileRelationResult,
     MemoryProfileResult,
     MemoryReflectStats,
+    MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
 )
@@ -338,6 +339,9 @@ def test_get_memory_graph_for_current_user(monkeypatch):
                 "target": "entity-1",
                 "predicate": "偏好",
                 "evidence": "用户喜欢周杰伦。",
+                "valid_at": None,
+                "invalid_at": None,
+                "is_current": True,
             }
         ],
         "communities": [
@@ -456,6 +460,14 @@ def test_memory_management_endpoints_for_current_user(monkeypatch):
     missing_insight_response = client.post(
         "/api/memories/insights/missing/delete", headers=headers
     )
+    relation_history_response = client.get(
+        "/api/memories/entities/entity-1/relations/history?predicate=就职于",
+        headers=headers,
+    )
+    missing_relation_history_response = client.get(
+        "/api/memories/entities/missing/relations/history",
+        headers=headers,
+    )
 
     assert profile_response.status_code == 200
     assert profile_response.json()["data"] == {
@@ -482,10 +494,13 @@ def test_memory_management_endpoints_for_current_user(monkeypatch):
                                 "predicate": "偏好",
                                 "target_entity_id": "entity-1",
                                 "target_name": "周杰伦",
-                                "target_type": "生命体",
-                                "evidence": "用户喜欢周杰伦。",
-                            }
-                        ],
+                                    "target_type": "生命体",
+                                    "evidence": "用户喜欢周杰伦。",
+                                    "valid_at": None,
+                                    "invalid_at": None,
+                                    "is_current": True,
+                                }
+                            ],
                     }
                 ],
             }
@@ -493,6 +508,21 @@ def test_memory_management_endpoints_for_current_user(monkeypatch):
     }
     assert insights_response.status_code == 200
     assert insights_response.json()["data"][0]["theme"] == "音乐偏好"
+    assert relation_history_response.status_code == 200
+    assert relation_history_response.json()["data"] == [
+        {
+            "relation_id": "rel-current",
+            "direction": "outgoing",
+            "neighbor_entity_id": "entity-company",
+            "neighbor_name": "腾讯",
+            "neighbor_type": "组织机构",
+            "predicate": "就职于",
+            "evidence": "用户现在在腾讯工作。",
+            "valid_at": "2026-06-16T09:00:00",
+            "invalid_at": None,
+            "is_current": True,
+        }
+    ]
     assert merge_response.status_code == 200
     assert merge_response.json()["data"] == {
         "removed_entities": 2,
@@ -504,6 +534,8 @@ def test_memory_management_endpoints_for_current_user(monkeypatch):
     assert missing_entity_response.json()["msg"] == "实体不存在或无权访问"
     assert missing_insight_response.status_code == 404
     assert missing_insight_response.json()["msg"] == "洞察不存在或无权访问"
+    assert missing_relation_history_response.status_code == 404
+    assert missing_relation_history_response.json()["msg"] == "实体不存在或无权访问"
     app.dependency_overrides.clear()
 
 
@@ -744,3 +776,22 @@ class FakeManagementMemoryService:
     async def delete_insight(self, insight_id):
         if insight_id == "missing":
             raise NotFoundError("洞察不存在或无权访问")
+
+    async def relation_history(self, entity_id, predicate=None):
+        if entity_id == "missing":
+            raise NotFoundError("实体不存在或无权访问")
+        assert predicate == "就职于"
+        return [
+            MemoryRelationHistoryResult(
+                relation_id="rel-current",
+                direction="outgoing",
+                neighbor_entity_id="entity-company",
+                neighbor_name="腾讯",
+                neighbor_type="组织机构",
+                predicate="就职于",
+                evidence="用户现在在腾讯工作。",
+                valid_at="2026-06-16T09:00:00",
+                invalid_at=None,
+                is_current=True,
+            )
+        ]

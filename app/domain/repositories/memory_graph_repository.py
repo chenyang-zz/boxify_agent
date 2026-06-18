@@ -16,6 +16,7 @@ from app.domain.models.memory_graph import (
     MemoryMergeDuplicatesResult,
     MemoryProfileEntityResult,
     MemoryPromotionStats,
+    MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
 )
 
@@ -202,6 +203,12 @@ class MemoryGraphRepository(Protocol):
         self, user_id: str
     ) -> list[MemoryProfileEntityResult]:
         """读取当前用户画像实体及一跳出边事实。"""
+        ...
+
+    async def entity_relation_history(
+        self, user_id: str, entity_id: str, predicate: str | None = None
+    ) -> list[MemoryRelationHistoryResult] | None:
+        """读取当前用户单实体一跳关系历史；实体不存在时返回 None。"""
         ...
 
     async def entity_type_counts(self, user_id: str) -> dict[str, int]:

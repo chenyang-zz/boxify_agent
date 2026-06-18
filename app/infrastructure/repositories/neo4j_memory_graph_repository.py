@@ -19,6 +19,7 @@ from app.domain.models.memory_graph import (
     MemoryProfileEntityResult,
     MemoryProfileRelationResult,
     MemoryPromotionStats,
+    MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
     stable_memory_graph_id,
@@ -563,9 +564,10 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         cypher = """
         MATCH (entity:Entity {user_id: $user_id})
         WHERE entity.id IN $entity_ids
-        OPTIONAL MATCH (entity)-[:RELATION]-(neighbor:Entity {user_id: $user_id})
+        OPTIONAL MATCH (entity)-[relation:RELATION]-(neighbor:Entity {user_id: $user_id})
         WITH entity, neighbor
         WHERE neighbor IS NOT NULL
+          AND (relation.invalid_at IS NULL OR relation.invalid_at > datetime())
         RETURN entity.id AS entity_id,
                neighbor.id AS id,
                neighbor.community_id AS community_id,
@@ -674,12 +676,17 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         MATCH (source:Entity {user_id: $user_id, community_id: $community_id})
             -[relation:RELATION]->
             (target:Entity {user_id: $user_id, community_id: $community_id})
+        WHERE relation.invalid_at IS NULL OR relation.invalid_at > datetime()
         RETURN source.id AS source_entity_id,
                source.name AS source_name,
                target.id AS target_entity_id,
                target.name AS target_name,
                relation.name AS name,
-               relation.evidence AS evidence
+               relation.evidence AS evidence,
+               toString(relation.valid_at) AS valid_at,
+               toString(relation.invalid_at) AS invalid_at,
+               relation.invalid_at IS NULL OR relation.invalid_at > datetime()
+                   AS is_current
         ORDER BY coalesce(relation.importance, 0.5) DESC
         LIMIT 50
         """
@@ -766,10 +773,15 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         MATCH (source:Entity {user_id: $user_id})
             -[relation:RELATION {user_id: $user_id}]->
             (target:Entity {user_id: $user_id})
+        WHERE relation.invalid_at IS NULL OR relation.invalid_at > datetime()
         RETURN source.id AS source,
                target.id AS target,
                relation.name AS predicate,
-               relation.evidence AS evidence
+               relation.evidence AS evidence,
+               toString(relation.valid_at) AS valid_at,
+               toString(relation.invalid_at) AS invalid_at,
+               relation.invalid_at IS NULL OR relation.invalid_at > datetime()
+                   AS is_current
         ORDER BY coalesce(relation.importance, 0.5) DESC
         """
         async with self._driver.session(database=self._database) as session:
@@ -783,7 +795,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         """读取当前用户指定实体的一跳子图。"""
         node_cypher = """
         MATCH (center:Entity {id: $entity_id, user_id: $user_id})
-        OPTIONAL MATCH (center)-[:RELATION]-(neighbor:Entity {user_id: $user_id})
+        OPTIONAL MATCH (center)-[relation:RELATION]-(neighbor:Entity {user_id: $user_id})
+        WHERE relation IS NULL OR relation.invalid_at IS NULL OR relation.invalid_at > datetime()
         WITH collect(DISTINCT center) + collect(DISTINCT neighbor) AS raw_nodes
         UNWIND raw_nodes AS entity
         WITH DISTINCT entity
@@ -806,15 +819,22 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         edge_cypher = """
         MATCH (center:Entity {id: $entity_id, user_id: $user_id})
         MATCH (center)-[relation:RELATION]-(neighbor:Entity {user_id: $user_id})
+        WHERE relation.invalid_at IS NULL OR relation.invalid_at > datetime()
         WITH collect(DISTINCT center.id) + collect(DISTINCT neighbor.id) AS node_ids
         MATCH (source:Entity {user_id: $user_id})
             -[relation:RELATION {user_id: $user_id}]->
             (target:Entity {user_id: $user_id})
-        WHERE source.id IN node_ids AND target.id IN node_ids
+        WHERE source.id IN node_ids
+          AND target.id IN node_ids
+          AND (relation.invalid_at IS NULL OR relation.invalid_at > datetime())
         RETURN source.id AS source,
                target.id AS target,
                relation.name AS predicate,
-               relation.evidence AS evidence
+               relation.evidence AS evidence,
+               toString(relation.valid_at) AS valid_at,
+               toString(relation.invalid_at) AS invalid_at,
+               relation.invalid_at IS NULL OR relation.invalid_at > datetime()
+                   AS is_current
         ORDER BY coalesce(relation.importance, 0.5) DESC
         """
         async with self._driver.session(database=self._database) as session:
@@ -845,13 +865,21 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         OPTIONAL MATCH (entity)-[relation:RELATION {user_id: $user_id}]->
             (target:Entity {user_id: $user_id})
         WITH entity,
-             collect(DISTINCT {
+             collect(DISTINCT CASE
+               WHEN relation IS NULL
+                 OR (relation.invalid_at IS NOT NULL AND relation.invalid_at <= datetime())
+               THEN null
+               ELSE {
                  predicate: relation.name,
                  target_entity_id: target.id,
                  target_name: target.name,
                  target_type: target.type,
-                 evidence: relation.evidence
-             }) AS raw_relations
+                 evidence: relation.evidence,
+                 valid_at: toString(relation.valid_at),
+                 invalid_at: toString(relation.invalid_at),
+                 is_current: relation.invalid_at IS NULL OR relation.invalid_at > datetime()
+               }
+             END) AS raw_relations
         RETURN entity.id AS id,
                entity.name AS name,
                entity.type AS type,
@@ -863,7 +891,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                coalesce(entity.mention_count, 0) AS mention_count,
                coalesce(entity.core_facts, []) AS core_facts,
                coalesce(entity.traits, []) AS traits,
-               [rel IN raw_relations WHERE rel.predicate IS NOT NULL] AS relations
+               [rel IN raw_relations WHERE rel IS NOT NULL AND rel.predicate IS NOT NULL] AS relations
         ORDER BY entity.type ASC,
                  coalesce(entity.importance, 0.5) DESC,
                  entity.name ASC
@@ -872,6 +900,53 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             result = await session.run(cypher, user_id=user_id)
             rows = await result.data()
         return [self._row_to_profile_entity(row) for row in rows]
+
+    async def entity_relation_history(
+        self, user_id: str, entity_id: str, predicate: str | None = None
+    ) -> list[MemoryRelationHistoryResult] | None:
+        """读取当前用户单实体一跳关系历史。"""
+        exists_cypher = """
+        MATCH (center:Entity {id: $entity_id, user_id: $user_id})
+        RETURN center.id AS id
+        """
+        history_cypher = """
+        MATCH (center:Entity {id: $entity_id, user_id: $user_id})
+        MATCH (center)-[relation:RELATION {user_id: $user_id}]-
+            (neighbor:Entity {user_id: $user_id})
+        WHERE $predicate IS NULL OR relation.name = $predicate
+        RETURN relation.id AS relation_id,
+               CASE WHEN startNode(relation).id = center.id
+                    THEN 'outgoing' ELSE 'incoming' END AS direction,
+               neighbor.id AS neighbor_entity_id,
+               neighbor.name AS neighbor_name,
+               neighbor.type AS neighbor_type,
+               relation.name AS predicate,
+               relation.evidence AS evidence,
+               toString(relation.valid_at) AS valid_at,
+               toString(relation.invalid_at) AS invalid_at,
+               relation.invalid_at IS NULL OR relation.invalid_at > datetime()
+                   AS is_current
+        ORDER BY is_current DESC,
+                 coalesce(relation.valid_at, datetime('1970-01-01T00:00:00')) DESC,
+                 relation.name ASC
+        """
+        async with self._driver.session(database=self._database) as session:
+            exists_result = await session.run(
+                exists_cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+            )
+            exists_rows = await exists_result.data()
+            if not exists_rows:
+                return None
+            result = await session.run(
+                history_cypher,
+                user_id=user_id,
+                entity_id=entity_id,
+                predicate=predicate,
+            )
+            rows = await result.data()
+        return [self._row_to_relation_history(row) for row in rows]
 
     async def entity_type_counts(self, user_id: str) -> dict[str, int]:
         """统计当前用户各实体类型数量。"""
@@ -964,25 +1039,45 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         """返回实体召回后补齐来源记忆和一跳关系的 Cypher 片段。"""
         return """
         ORDER BY score DESC LIMIT $top_k
-        OPTIONAL MATCH (source:Entity {user_id: $user_id})-[incoming:RELATION]->(node)
-        OPTIONAL MATCH (node)-[outgoing:RELATION]->(target:Entity {user_id: $user_id})
-        OPTIONAL MATCH (node)<-[:MENTIONS]-(statement:Statement)
-            <-[:HAS_STATEMENT]-(:Chunk)<-[:HAS_CHUNK]-(dialogue:Dialogue)
+        OPTIONAL MATCH (source:Entity {user_id: $user_id})
+            -[incoming:RELATION {user_id: $user_id}]->(node)
+        OPTIONAL MATCH (node)-[outgoing:RELATION {user_id: $user_id}]->
+            (target:Entity {user_id: $user_id})
+        OPTIONAL MATCH (node)<-[:MENTIONS {user_id: $user_id}]-
+            (statement:Statement {user_id: $user_id})
+            <-[:HAS_STATEMENT]-(:Chunk {user_id: $user_id})
+            <-[:HAS_CHUNK]-(dialogue:Dialogue {user_id: $user_id})
         WITH node, score, dialogue,
-             collect(DISTINCT {
+             collect(DISTINCT CASE
+               WHEN incoming IS NULL
+                 OR (incoming.invalid_at IS NOT NULL AND incoming.invalid_at <= datetime())
+               THEN null
+               ELSE {
                 name: incoming.name,
                 direction: 'incoming',
                 neighbor_name: source.name,
                 neighbor_type: source.type,
-                evidence: incoming.evidence
-             }) +
-             collect(DISTINCT {
+                evidence: incoming.evidence,
+                valid_at: toString(incoming.valid_at),
+                invalid_at: toString(incoming.invalid_at),
+                is_current: incoming.invalid_at IS NULL OR incoming.invalid_at > datetime()
+               }
+             END) +
+             collect(DISTINCT CASE
+               WHEN outgoing IS NULL
+                 OR (outgoing.invalid_at IS NOT NULL AND outgoing.invalid_at <= datetime())
+               THEN null
+               ELSE {
                 name: outgoing.name,
                 direction: 'outgoing',
                 neighbor_name: target.name,
                 neighbor_type: target.type,
-                evidence: outgoing.evidence
-             }) AS relations
+                evidence: outgoing.evidence,
+                valid_at: toString(outgoing.valid_at),
+                invalid_at: toString(outgoing.invalid_at),
+                is_current: outgoing.invalid_at IS NULL OR outgoing.invalid_at > datetime()
+               }
+             END) AS relations
         RETURN {
             id: node.id,
             name: node.name,
@@ -997,7 +1092,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             memory_id: dialogue.memory_id,
             memory_summary: coalesce(dialogue.summary, '')
         } AS entity,
-        [relation IN relations WHERE relation.name IS NOT NULL] AS relations,
+        [relation IN relations WHERE relation IS NOT NULL AND relation.name IS NOT NULL] AS relations,
         score
         """
 
@@ -1151,6 +1246,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                     new_relation.statement_id = relation.statement_id,
                     new_relation.importance = coalesce(relation.importance, 0.5),
                     new_relation.confidence = coalesce(relation.confidence, 0.8),
+                    new_relation.valid_at = relation.valid_at,
+                    new_relation.invalid_at = relation.invalid_at,
                     new_relation.access_count = coalesce(relation.access_count, 0),
                     new_relation.last_access_at = relation.last_access_at,
                     new_relation.memory_layer = coalesce(
@@ -1178,6 +1275,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                     new_relation.statement_id = relation.statement_id,
                     new_relation.importance = coalesce(relation.importance, 0.5),
                     new_relation.confidence = coalesce(relation.confidence, 0.8),
+                    new_relation.valid_at = relation.valid_at,
+                    new_relation.invalid_at = relation.invalid_at,
                     new_relation.access_count = coalesce(relation.access_count, 0),
                     new_relation.last_access_at = relation.last_access_at,
                     new_relation.memory_layer = coalesce(
@@ -1283,6 +1382,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 statement.temporal_type = row.temporal_type,
                 statement.importance = row.importance,
                 statement.confidence = row.confidence,
+                statement.valid_at = row.valid_at,
+                statement.invalid_at = row.invalid_at,
                 statement.access_count = coalesce(statement.access_count, row.access_count),
                 statement.last_access_at = coalesce(statement.last_access_at, row.last_access_at),
                 statement.memory_layer = CASE
@@ -1339,6 +1440,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 rel.statement_id = statement.id,
                 rel.importance = row.importance,
                 rel.confidence = row.confidence,
+                rel.valid_at = row.valid_at,
+                rel.invalid_at = row.invalid_at,
                 rel.access_count = coalesce(rel.access_count, row.access_count),
                 rel.last_access_at = coalesce(rel.last_access_at, row.last_access_at),
                 rel.memory_layer = CASE
@@ -1468,6 +1571,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             target_name=str(row.get("target_name") or ""),
             name=str(row.get("name") or ""),
             evidence=str(row.get("evidence") or ""),
+            valid_at=row.get("valid_at"),
+            invalid_at=row.get("invalid_at"),
+            is_current=bool(row.get("is_current", True)),
         )
 
     @staticmethod
@@ -1495,6 +1601,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             target=str(row.get("target") or ""),
             predicate=str(row.get("predicate") or ""),
             evidence=str(row.get("evidence") or ""),
+            valid_at=row.get("valid_at"),
+            invalid_at=row.get("invalid_at"),
+            is_current=bool(row.get("is_current", True)),
         )
 
     @staticmethod
@@ -1519,10 +1628,29 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                     target_name=relation.get("target_name"),
                     target_type=relation.get("target_type"),
                     evidence=str(relation.get("evidence") or ""),
+                    valid_at=relation.get("valid_at"),
+                    invalid_at=relation.get("invalid_at"),
+                    is_current=bool(relation.get("is_current", True)),
                 )
                 for relation in row.get("relations") or []
                 if relation.get("predicate")
             ],
+        )
+
+    @staticmethod
+    def _row_to_relation_history(row: dict[str, Any]) -> MemoryRelationHistoryResult:
+        """把 Neo4j 行转换为关系历史项。"""
+        return MemoryRelationHistoryResult(
+            relation_id=str(row.get("relation_id") or ""),
+            direction=str(row.get("direction") or ""),
+            neighbor_entity_id=str(row.get("neighbor_entity_id") or ""),
+            neighbor_name=str(row.get("neighbor_name") or ""),
+            neighbor_type=str(row.get("neighbor_type") or ""),
+            predicate=str(row.get("predicate") or ""),
+            evidence=str(row.get("evidence") or ""),
+            valid_at=row.get("valid_at"),
+            invalid_at=row.get("invalid_at"),
+            is_current=bool(row.get("is_current", True)),
         )
 
     @staticmethod

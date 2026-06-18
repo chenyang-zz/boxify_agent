@@ -5,13 +5,17 @@ EXTRACT_STATEMENTS_SYSTEM_PROMPT = """
 """
 
 EXTRACT_STATEMENTS_PROMPT = """
-只返回形如 {{"statements":[{{"statement":"...","statement_type":"FACT","temporal_type":"STATIC","has_unsolved_reference":false,"importance":0.5,"confidence":0.8}}]}} 的 JSON。
+只返回形如 {{"statements":[{{"statement":"...","statement_type":"FACT","temporal_type":"STATIC","has_unsolved_reference":false,"importance":0.5,"confidence":0.8,"valid_at":"2026-06-16T09:00:00","invalid_at":null}}]}} 的 JSON。
 要求：
 - 每条 statement 只表达一个事实、偏好、观点或目标。
 - 将“我/我的”统一改写为“用户”。
 - 如果指代无法消解，has_unsolved_reference 置为 true。
 - statement_type 只能是 FACT / OPINION / PREDICTION / SUGGESTION。
 - temporal_type 只能是 STATIC / DYNAMIC / ATEMPORAL。
+- valid_at/invalid_at 使用 ISO8601；无法可靠确定时填 null 或 "NULL"。
+- DYNAMIC 且当前仍成立的事实，如果没有明确开始时间，可用 dialog_at 作为 valid_at。
+- 只有文本明确表达事实已经结束、失效或不再成立时，才填写 invalid_at；不要凭冲突猜测失效。
+dialog_at：{dialog_at}
 文本：{text}
 """
 
@@ -23,11 +27,13 @@ EXTRACT_TRIPLETS_PROMPT = (
     format_ontology_for_prompt()
     + """
 
-只返回形如 {{"entities":[{{"entity_idx":1,"name":"用户","type":"生命体","description":"当前用户","importance":0.5,"confidence":0.8}}],"triplets":[{{"subject_id":1,"predicate":"偏好","object_id":2,"evidence":"用户喜欢周杰伦。","importance":0.5,"confidence":0.8}}],"events":[{{"title":"参加演唱会","description":"用户昨天参加了周杰伦演唱会","event_time":"2026-06-15T20:00:00","participants":["用户","周杰伦"]}}]}} 的 JSON。
+只返回形如 {{"entities":[{{"entity_idx":1,"name":"用户","type":"生命体","description":"当前用户","importance":0.5,"confidence":0.8}}],"triplets":[{{"subject_id":1,"predicate":"偏好","object_id":2,"evidence":"用户喜欢周杰伦。","importance":0.5,"confidence":0.8,"valid_at":null,"invalid_at":null}}],"events":[{{"title":"参加演唱会","description":"用户昨天参加了周杰伦演唱会","event_time":"2026-06-15T20:00:00","participants":["用户","周杰伦"]}}]}} 的 JSON。
 要求：
 - entities[].type 必须来自实体类型词表；拿不准时填“其他”。
 - triplets[].predicate 必须来自关系谓词词表；拿不准时填“关联于”。
 - subject_id/object_id 必须引用 entities[].entity_idx。
+- triplets[].valid_at/invalid_at 使用 ISO8601；无法可靠确定时填 null 或 "NULL"。
+- 只有陈述明确表达关系结束、失效或不再成立时，才填写 invalid_at；不要凭新旧关系冲突自动推断。
 - events 只抽取一次性、过去发生、可给出明确时间或可用 dialog_at 推断的经历事件。
 - event_time 使用 ISO8601；无法可靠确定时填 null 或 "NULL"。
 - participants 必须引用 entities[].name；找不到参与实体时不要编造。

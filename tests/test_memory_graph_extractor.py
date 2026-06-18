@@ -24,6 +24,7 @@ async def test_memory_graph_extractor_writes_four_layer_graph_with_deduped_entit
                 temporal_type="STATIC",
                 importance=0.7,
                 confidence=0.9,
+                valid_at="2026-06-16T09:00:00",
             ),
             StatementNode(
                 id="statement-2",
@@ -70,12 +71,14 @@ async def test_memory_graph_extractor_writes_four_layer_graph_with_deduped_entit
                     predicate="位于",
                     object_id=2,
                     evidence="用户住在上海。",
+                    valid_at="2026-06-16T09:00:00",
                 ),
                 ExtractedTriplet(
                     subject_id=3,
                     predicate="LIKES",
                     object_id=4,
                     evidence="用户喜欢周杰伦。",
+                    invalid_at="2026-07-01T00:00:00",
                 ),
             ],
             events=[
@@ -126,6 +129,11 @@ async def test_memory_graph_extractor_writes_four_layer_graph_with_deduped_entit
         ("位于", "用户住在上海。"),
         ("关联于", "用户喜欢周杰伦。"),
     ]
+    assert graph.statements[0].valid_at.isoformat() == "2026-06-16T09:00:00"
+    assert graph.relations[0].valid_at.isoformat() == "2026-06-16T09:00:00"
+    assert graph.relations[0].invalid_at is None
+    assert graph.relations[1].valid_at is None
+    assert graph.relations[1].invalid_at.isoformat() == "2026-07-01T00:00:00"
     assert graph.relations[0].source_entity_id == graph.relations[1].source_entity_id
     assert len(graph.events) == 1
     assert graph.events[0].title == "参加周杰伦演唱会"
@@ -320,7 +328,7 @@ class FakeFactExtractor:
         self._triplets = triplets
         self.chunk_texts = []
 
-    async def extract_statements(self, chunks):
+    async def extract_statements(self, chunks, dialog_at=None):
         self.chunk_texts.append([chunk.text for chunk in chunks])
         return self._statements
 

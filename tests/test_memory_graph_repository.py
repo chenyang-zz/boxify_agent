@@ -19,6 +19,7 @@ from app.domain.models.memory_graph import (
     MemoryProfileEntityResult,
     MemoryProfileRelationResult,
     MemoryPromotionStats,
+    MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
     RelationEdge,
@@ -55,6 +56,7 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
                 chunk_id="chunk-1",
                 index=0,
                 text="用户喜欢周杰伦。",
+                valid_at="2026-06-16T09:00:00",
             )
         ],
         entities=[
@@ -76,6 +78,8 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
                 statement_id="statement-1",
                 name="LIKES",
                 evidence="用户喜欢周杰伦。",
+                valid_at="2026-06-16T09:00:00",
+                invalid_at="2026-07-01T00:00:00",
             )
         ],
         events=[
@@ -116,7 +120,10 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
     )
     assert save_params["user_id"] == "user-a"
     assert save_params["entities"][0]["user_id"] == "user-a"
+    assert save_params["statements"][0]["valid_at"].isoformat() == "2026-06-16T09:00:00"
     assert save_params["relations"][0]["user_id"] == "user-a"
+    assert save_params["relations"][0]["valid_at"].isoformat() == "2026-06-16T09:00:00"
+    assert save_params["relations"][0]["invalid_at"].isoformat() == "2026-07-01T00:00:00"
     assert event_params["events"][0]["user_id"] == "user-a"
     assert involves_params["involves"][0]["user_id"] == "user-a"
 
@@ -152,7 +159,11 @@ def test_memory_graph_nodes_have_dynamic_defaults():
     assert entity.core_facts == []
     assert entity.traits == []
     assert statement.memory_layer == "short_term"
+    assert statement.valid_at is None
+    assert statement.invalid_at is None
     assert relation.memory_layer == "short_term"
+    assert relation.valid_at is None
+    assert relation.invalid_at is None
 
 
 @pytest.mark.anyio
@@ -175,6 +186,9 @@ async def test_neo4j_repository_returns_one_hop_relationships_with_source_memory
                         "neighbor_name": "用户",
                         "neighbor_type": "Person",
                         "evidence": "用户喜欢周杰伦。",
+                        "valid_at": "2026-06-16T09:00:00",
+                        "invalid_at": None,
+                        "is_current": True,
                     }
                 ],
                 "score": 0.8,
@@ -193,6 +207,8 @@ async def test_neo4j_repository_returns_one_hop_relationships_with_source_memory
     assert results[0].entity_type == "Person"
     assert results[0].source_memory_id == "mem-1"
     assert results[0].relations[0].evidence == "用户喜欢周杰伦。"
+    assert results[0].relations[0].valid_at.isoformat() == "2026-06-16T09:00:00"
+    assert results[0].relations[0].is_current is True
 
 
 @pytest.mark.anyio
@@ -696,6 +712,9 @@ async def test_neo4j_repository_returns_graph_view_nodes_and_edges_by_user():
             target="entity-1",
             predicate="偏好",
             evidence="用户喜欢周杰伦。",
+            valid_at="2026-06-16T09:00:00",
+            invalid_at=None,
+            is_current=True,
         )
     ]
     node_query, node_params = driver.executed[0]
@@ -704,6 +723,7 @@ async def test_neo4j_repository_returns_graph_view_nodes_and_edges_by_user():
     assert "MATCH (source:Entity {user_id: $user_id})" in edge_query
     assert "Event" not in edge_query
     assert "INVOLVES" not in edge_query
+    assert "relation.invalid_at IS NULL OR relation.invalid_at > datetime()" in edge_query
     assert node_params == {"user_id": "user-a"}
     assert edge_params == {"user_id": "user-a"}
 
@@ -712,7 +732,7 @@ async def test_neo4j_repository_returns_graph_view_nodes_and_edges_by_user():
 async def test_neo4j_repository_returns_entity_subgraph_by_user():
     driver = FakeNeo4jDriver(
         result_rows_by_keyword={
-            "OPTIONAL MATCH (center)-[:RELATION]-(neighbor:Entity {user_id: $user_id})": [
+            "OPTIONAL MATCH (center)-[relation:RELATION]-(neighbor:Entity {user_id: $user_id})": [
                 _graph_node_row("entity-1"),
                 _graph_node_row("entity-user", name="用户", description="当前用户"),
             ],
@@ -765,6 +785,9 @@ async def test_neo4j_repository_returns_entity_subgraph_by_user():
                 target="entity-1",
                 predicate="偏好",
                 evidence="用户喜欢周杰伦。",
+                valid_at="2026-06-16T09:00:00",
+                invalid_at=None,
+                is_current=True,
             )
         ],
     )
@@ -774,6 +797,7 @@ async def test_neo4j_repository_returns_entity_subgraph_by_user():
     assert "MATCH (center:Entity {id: $entity_id, user_id: $user_id})" in edge_query
     assert "Event" not in edge_query
     assert "INVOLVES" not in edge_query
+    assert "relation.invalid_at IS NULL OR relation.invalid_at > datetime()" in edge_query
     assert node_params == {"user_id": "user-a", "entity_id": "entity-1"}
     assert edge_params == {"user_id": "user-a", "entity_id": "entity-1"}
 
@@ -802,6 +826,9 @@ async def test_neo4j_repository_returns_profile_and_deletes_entities_insights_by
                             "target_name": "周杰伦",
                             "target_type": "生命体",
                             "evidence": "用户喜欢周杰伦。",
+                            "valid_at": "2026-06-16T09:00:00",
+                            "invalid_at": None,
+                            "is_current": True,
                         }
                     ],
                 }
@@ -842,6 +869,9 @@ async def test_neo4j_repository_returns_profile_and_deletes_entities_insights_by
                     target_name="周杰伦",
                     target_type="生命体",
                     evidence="用户喜欢周杰伦。",
+                    valid_at="2026-06-16T09:00:00",
+                    invalid_at=None,
+                    is_current=True,
                 )
             ],
         )
@@ -855,6 +885,88 @@ async def test_neo4j_repository_returns_profile_and_deletes_entities_insights_by
             assert "MATCH (entity:Entity {id: $entity_id, user_id: $user_id})" in query
         if "DETACH DELETE insight" in query:
             assert "MATCH (insight:Insight {id: $insight_id, user_id: $user_id})" in query
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_relation_history_by_user_and_predicate():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "RETURN center.id AS id": [{"id": "entity-1"}],
+            "RETURN relation.id AS relation_id": [
+                {
+                    "relation_id": "rel-current",
+                    "direction": "outgoing",
+                    "neighbor_entity_id": "entity-company",
+                    "neighbor_name": "腾讯",
+                    "neighbor_type": "组织机构",
+                    "predicate": "就职于",
+                    "evidence": "用户现在在腾讯工作。",
+                    "valid_at": "2026-06-16T09:00:00",
+                    "invalid_at": None,
+                    "is_current": True,
+                },
+                {
+                    "relation_id": "rel-history",
+                    "direction": "outgoing",
+                    "neighbor_entity_id": "entity-old-company",
+                    "neighbor_name": "字节",
+                    "neighbor_type": "组织机构",
+                    "predicate": "就职于",
+                    "evidence": "用户曾经在字节工作。",
+                    "valid_at": "2024-01-01T00:00:00",
+                    "invalid_at": "2025-01-01T00:00:00",
+                    "is_current": False,
+                },
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    relations = await repository.entity_relation_history(
+        "user-a",
+        "entity-1",
+        predicate="就职于",
+    )
+
+    assert relations == [
+        MemoryRelationHistoryResult(
+            relation_id="rel-current",
+            direction="outgoing",
+            neighbor_entity_id="entity-company",
+            neighbor_name="腾讯",
+            neighbor_type="组织机构",
+            predicate="就职于",
+            evidence="用户现在在腾讯工作。",
+            valid_at="2026-06-16T09:00:00",
+            invalid_at=None,
+            is_current=True,
+        ),
+        MemoryRelationHistoryResult(
+            relation_id="rel-history",
+            direction="outgoing",
+            neighbor_entity_id="entity-old-company",
+            neighbor_name="字节",
+            neighbor_type="组织机构",
+            predicate="就职于",
+            evidence="用户曾经在字节工作。",
+            valid_at="2024-01-01T00:00:00",
+            invalid_at="2025-01-01T00:00:00",
+            is_current=False,
+        ),
+    ]
+    history_query, params = driver.executed[-1]
+    assert "MATCH (center:Entity {id: $entity_id, user_id: $user_id})" in history_query
+    assert "relation.name = $predicate" in history_query
+    assert "relation.invalid_at IS NULL OR relation.invalid_at > datetime()" in history_query
+    assert params == {
+        "user_id": "user-a",
+        "entity_id": "entity-1",
+        "predicate": "就职于",
+    }
 
 
 @pytest.mark.anyio
@@ -890,6 +1002,8 @@ async def test_neo4j_repository_merges_duplicate_entities_in_single_transaction(
     assert "MERGE (event)-[involves:INVOLVES" in executed_queries
     assert "MERGE (keeper)-[new_relation:RELATION" in executed_queries
     assert "MERGE (source)-[new_relation:RELATION" in executed_queries
+    assert "new_relation.valid_at = relation.valid_at" in executed_queries
+    assert "new_relation.invalid_at = relation.invalid_at" in executed_queries
     assert "target.id <> $keeper_id" in executed_queries
     assert "source.id <> $keeper_id" in executed_queries
     assert "DETACH DELETE duplicate" in executed_queries
@@ -997,4 +1111,7 @@ def _graph_edge_row():
         "target": "entity-1",
         "predicate": "偏好",
         "evidence": "用户喜欢周杰伦。",
+        "valid_at": "2026-06-16T09:00:00",
+        "invalid_at": None,
+        "is_current": True,
     }

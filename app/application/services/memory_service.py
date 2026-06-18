@@ -18,6 +18,7 @@ from app.domain.models.memory_graph import (
     MemoryMergeDuplicatesResult,
     MemoryProfileGroupResult,
     MemoryProfileResult,
+    MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
@@ -238,3 +239,18 @@ class MemoryService:
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法合并重复实体")
         return await self._graph_repository.merge_duplicate_entities(self._user_id)
+
+    async def relation_history(
+        self, entity_id: str, predicate: str | None = None
+    ) -> list[MemoryRelationHistoryResult]:
+        """读取当前用户单实体一跳关系历史。"""
+        if not self._graph_repository:
+            raise BadRequestError("记忆图谱不可用，无法查询关系历史")
+        relations = await self._graph_repository.entity_relation_history(
+            self._user_id,
+            entity_id,
+            predicate=predicate,
+        )
+        if relations is None:
+            raise NotFoundError("实体不存在或无权访问")
+        return relations
