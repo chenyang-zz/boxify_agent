@@ -23,6 +23,14 @@ from app.domain.models.memory_graph import (
     MemoryQualityIssueListResult,
     MemoryQualityIssueResult,
     MemoryQualityIssueSummaryResult,
+    MemoryTraceChunkResult,
+    MemoryTraceDialogueResult,
+    MemoryTraceEntityResult,
+    MemoryTraceEventResult,
+    MemoryTraceMentionResult,
+    MemoryTraceRelationResult,
+    MemoryTraceResult,
+    MemoryTraceStatementResult,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
@@ -116,6 +124,7 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
     assert "MERGE (entity:Entity {id: row.id, user_id: row.user_id})" in executed_queries
     assert "MERGE (source)-[rel:RELATION {id: row.id, user_id: row.user_id}]->(target)" in executed_queries
     assert "MERGE (event:Event {id: row.id, user_id: row.user_id})" in executed_queries
+    assert "event.dialogue_id = row.dialogue_id" in executed_queries
     assert "MERGE (event)-[involves:INVOLVES {id: row.id, user_id: row.user_id}]->(entity)" in executed_queries
     save_params = next(params for _, params in driver.executed if "entities" in params)
     event_params = next(params for _, params in driver.executed if "events" in params)
@@ -129,6 +138,7 @@ async def test_neo4j_repository_initializes_schema_and_merges_graph_by_user():
     assert save_params["relations"][0]["valid_at"].isoformat() == "2026-06-16T09:00:00"
     assert save_params["relations"][0]["invalid_at"].isoformat() == "2026-07-01T00:00:00"
     assert event_params["events"][0]["user_id"] == "user-a"
+    assert event_params["events"][0]["dialogue_id"] == "dialogue-1"
     assert involves_params["involves"][0]["user_id"] == "user-a"
 
 
@@ -1150,6 +1160,204 @@ async def test_neo4j_repository_returns_quality_counts_summary_and_issue_samples
     assert "relation.invalid_at <= datetime()" in executed_queries
     for _, params in driver.executed:
         assert params["user_id"] == "user-a"
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_memory_trace_by_user_and_memory_id():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "MATCH (dialogue:Dialogue {user_id: $user_id, memory_id: $memory_id})": [
+                {
+                    "dialogue": {
+                        "id": "dialogue-1",
+                        "memory_id": "mem-1",
+                        "summary": "用户喜欢周杰伦。",
+                        "created_at": "2026-06-16T09:00:00",
+                    },
+                    "chunks": [
+                        {
+                            "id": "chunk-1",
+                            "index": 0,
+                            "text": "用户喜欢周杰伦。",
+                        }
+                    ],
+                    "statements": [
+                        {
+                            "id": "statement-1",
+                            "chunk_id": "chunk-1",
+                            "index": 0,
+                            "text": "用户喜欢周杰伦。",
+                            "statement_type": "FACT",
+                            "temporal_type": "STATIC",
+                            "importance": 0.8,
+                            "confidence": 0.9,
+                            "valid_at": "2026-06-16T09:00:00",
+                            "invalid_at": None,
+                            "memory_layer": "short_term",
+                        }
+                    ],
+                    "entities": [
+                        {
+                            "id": "entity-user",
+                            "name": "用户",
+                            "type": "生命体",
+                            "description": "当前用户",
+                        },
+                        {
+                            "id": "entity-jay",
+                            "name": "周杰伦",
+                            "type": "生命体",
+                            "description": "歌手",
+                        },
+                    ],
+                    "mentions": [
+                        {
+                            "id": "mention-1",
+                            "statement_id": "statement-1",
+                            "entity_id": "entity-jay",
+                        }
+                    ],
+                    "relations": [
+                        {
+                            "id": "rel-1",
+                            "source_entity_id": "entity-user",
+                            "source_name": "用户",
+                            "target_entity_id": "entity-jay",
+                            "target_name": "周杰伦",
+                            "name": "偏好",
+                            "evidence": "用户喜欢周杰伦。",
+                            "statement_id": "statement-1",
+                            "valid_at": "2026-06-16T09:00:00",
+                            "invalid_at": None,
+                            "is_current": True,
+                        }
+                    ],
+                    "events": [
+                        {
+                            "id": "event-1",
+                            "title": "参加周杰伦演唱会",
+                            "description": "用户参加了周杰伦演唱会",
+                            "event_time": "2026-06-15T20:00:00",
+                            "created_at": "2026-06-16T09:00:00",
+                            "participants": [
+                                {
+                                    "entity_id": "entity-jay",
+                                    "name": "周杰伦",
+                                    "type": "生命体",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    trace = await repository.memory_trace("user-a", "mem-1")
+
+    assert trace == MemoryTraceResult(
+        dialogue=MemoryTraceDialogueResult(
+            id="dialogue-1",
+            memory_id="mem-1",
+            summary="用户喜欢周杰伦。",
+            created_at="2026-06-16T09:00:00",
+        ),
+        chunks=[
+            MemoryTraceChunkResult(
+                id="chunk-1",
+                index=0,
+                text="用户喜欢周杰伦。",
+            )
+        ],
+        statements=[
+            MemoryTraceStatementResult(
+                id="statement-1",
+                chunk_id="chunk-1",
+                index=0,
+                text="用户喜欢周杰伦。",
+                statement_type="FACT",
+                temporal_type="STATIC",
+                importance=0.8,
+                confidence=0.9,
+                valid_at="2026-06-16T09:00:00",
+                invalid_at=None,
+                memory_layer="short_term",
+            )
+        ],
+        entities=[
+            MemoryTraceEntityResult(
+                id="entity-user",
+                name="用户",
+                type="生命体",
+                description="当前用户",
+            ),
+            MemoryTraceEntityResult(
+                id="entity-jay",
+                name="周杰伦",
+                type="生命体",
+                description="歌手",
+            ),
+        ],
+        mentions=[
+            MemoryTraceMentionResult(
+                id="mention-1",
+                statement_id="statement-1",
+                entity_id="entity-jay",
+            )
+        ],
+        relations=[
+            MemoryTraceRelationResult(
+                id="rel-1",
+                source_entity_id="entity-user",
+                source_name="用户",
+                target_entity_id="entity-jay",
+                target_name="周杰伦",
+                name="偏好",
+                evidence="用户喜欢周杰伦。",
+                statement_id="statement-1",
+                valid_at="2026-06-16T09:00:00",
+                invalid_at=None,
+                is_current=True,
+            )
+        ],
+        events=[
+            MemoryTraceEventResult(
+                id="event-1",
+                title="参加周杰伦演唱会",
+                description="用户参加了周杰伦演唱会",
+                event_time="2026-06-15T20:00:00",
+                created_at="2026-06-16T09:00:00",
+                participants=[
+                    MemoryTimelineParticipantResult(
+                        entity_id="entity-jay",
+                        name="周杰伦",
+                        type="生命体",
+                    )
+                ],
+            )
+        ],
+    )
+    query, params = driver.executed[-1]
+    assert "MATCH (dialogue:Dialogue {user_id: $user_id, memory_id: $memory_id})" in query
+    assert "MATCH (event:Event {user_id: $user_id})" in query
+    assert "WHERE event.dialogue_id = dialogue.id" in query
+    assert params == {"user_id": "user-a", "memory_id": "mem-1"}
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_returns_none_when_memory_trace_is_missing():
+    repository = Neo4jMemoryGraphRepository(
+        driver=FakeNeo4jDriver(result_rows=[]),
+        database="neo4j",
+        embedding_dims=1024,
+    )
+
+    assert await repository.memory_trace("user-a", "missing") is None
 
 
 class FakeNeo4jDriver:

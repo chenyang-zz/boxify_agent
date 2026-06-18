@@ -1,5 +1,5 @@
 import json
-from typing import Any, Protocol
+from typing import Any
 
 from app.domain.external.json_parser import JSONParser
 

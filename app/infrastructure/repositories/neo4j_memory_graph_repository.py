@@ -26,6 +26,14 @@ from app.domain.models.memory_graph import (
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
+    MemoryTraceChunkResult,
+    MemoryTraceDialogueResult,
+    MemoryTraceEntityResult,
+    MemoryTraceEventResult,
+    MemoryTraceMentionResult,
+    MemoryTraceRelationResult,
+    MemoryTraceResult,
+    MemoryTraceStatementResult,
     stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
@@ -126,6 +134,8 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         """使用 MERGE 幂等写入一条记忆图谱。"""
         params = graph.model_dump(mode="python")
         params["user_id"] = graph.dialogue.user_id
+        for event in params["events"]:
+            event["dialogue_id"] = event.get("dialogue_id") or graph.dialogue.id
         async with self._driver.session(database=self._database) as session:
             await session.execute_write(self._merge_graph, params)
 
@@ -500,6 +510,118 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             result = await session.run(cypher, user_id=user_id, limit=limit)
             rows = await result.data()
         return [self._row_to_timeline_event(row) for row in rows]
+
+    async def memory_trace(
+        self, user_id: str, memory_id: str
+    ) -> MemoryTraceResult | None:
+        """读取当前用户单条 PG 记忆对应的四层图谱溯源。"""
+        cypher = """
+        MATCH (dialogue:Dialogue {user_id: $user_id, memory_id: $memory_id})
+        OPTIONAL MATCH (dialogue)-[:HAS_CHUNK]->(chunk:Chunk {user_id: $user_id})
+        WITH dialogue, chunk
+        ORDER BY chunk.index ASC
+        WITH dialogue,
+             [item IN collect({
+                 id: chunk.id,
+                 index: chunk.index,
+                 text: chunk.text
+             }) WHERE item.id IS NOT NULL] AS chunks
+        OPTIONAL MATCH (dialogue)-[:HAS_CHUNK]->
+            (chunk_for_statement:Chunk {user_id: $user_id})
+            -[:HAS_STATEMENT]->(statement:Statement {user_id: $user_id})
+        WITH dialogue, chunks, chunk_for_statement, statement
+        ORDER BY chunk_for_statement.index ASC, statement.index ASC
+        WITH dialogue, chunks,
+             [item IN collect({
+                 id: statement.id,
+                 chunk_id: chunk_for_statement.id,
+                 index: statement.index,
+                 text: statement.text,
+                 statement_type: statement.statement_type,
+                 temporal_type: statement.temporal_type,
+                 importance: coalesce(statement.importance, 0.5),
+                 confidence: coalesce(statement.confidence, 0.8),
+                 valid_at: toString(statement.valid_at),
+                 invalid_at: toString(statement.invalid_at),
+                 memory_layer: coalesce(statement.memory_layer, 'short_term')
+             }) WHERE item.id IS NOT NULL] AS statements
+        OPTIONAL MATCH (dialogue)-[:HAS_CHUNK]->(:Chunk {user_id: $user_id})
+            -[:HAS_STATEMENT]->(mentioned_statement:Statement {user_id: $user_id})
+            -[mention:MENTIONS {user_id: $user_id}]->
+            (mentioned_entity:Entity {user_id: $user_id})
+        WITH dialogue, chunks, statements,
+             [item IN collect(DISTINCT {
+                 id: mentioned_entity.id,
+                 name: mentioned_entity.name,
+                 type: mentioned_entity.type,
+                 description: mentioned_entity.description,
+                 importance: coalesce(mentioned_entity.importance, 0.5),
+                 confidence: coalesce(mentioned_entity.confidence, 0.8),
+                 memory_layer: coalesce(mentioned_entity.memory_layer, 'short_term')
+             }) WHERE item.id IS NOT NULL] AS entities,
+             [item IN collect(DISTINCT {
+                 id: mention.id,
+                 statement_id: mentioned_statement.id,
+                 entity_id: mentioned_entity.id
+             }) WHERE item.id IS NOT NULL] AS mentions
+        WITH dialogue, chunks, statements, entities, mentions,
+             [statement IN statements | statement.id] AS statement_ids
+        OPTIONAL MATCH (source:Entity {user_id: $user_id})
+            -[relation:RELATION {user_id: $user_id}]->
+            (target:Entity {user_id: $user_id})
+        WHERE relation.statement_id IN statement_ids
+        WITH dialogue, chunks, statements, entities, mentions,
+             [item IN collect(DISTINCT {
+                 id: relation.id,
+                 source_entity_id: source.id,
+                 source_name: source.name,
+                 target_entity_id: target.id,
+                 target_name: target.name,
+                 name: relation.name,
+                 evidence: relation.evidence,
+                 statement_id: relation.statement_id,
+                 valid_at: toString(relation.valid_at),
+                 invalid_at: toString(relation.invalid_at),
+                 is_current: relation.invalid_at IS NULL
+                     OR relation.invalid_at > datetime()
+             }) WHERE item.id IS NOT NULL] AS relations
+        OPTIONAL MATCH (event:Event {user_id: $user_id})
+        WHERE event.dialogue_id = dialogue.id
+        OPTIONAL MATCH (event)-[:INVOLVES {user_id: $user_id}]->
+            (participant:Entity {user_id: $user_id})
+        WITH dialogue, chunks, statements, entities, mentions, relations, event,
+             [item IN collect(DISTINCT {
+                 entity_id: participant.id,
+                 name: participant.name,
+                 type: participant.type
+             }) WHERE item.entity_id IS NOT NULL] AS participants
+        WITH dialogue, chunks, statements, entities, mentions, relations,
+             [item IN collect({
+                 id: event.id,
+                 title: event.title,
+                 description: event.description,
+                 event_time: toString(event.event_time),
+                 created_at: toString(event.created_at),
+                 participants: participants
+             }) WHERE item.id IS NOT NULL] AS events
+        RETURN {
+            id: dialogue.id,
+            memory_id: dialogue.memory_id,
+            summary: dialogue.summary,
+            created_at: toString(dialogue.created_at)
+        } AS dialogue,
+        chunks, statements, entities, mentions, relations, events
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(
+                cypher,
+                user_id=user_id,
+                memory_id=memory_id,
+            )
+            rows = await result.data()
+        if not rows:
+            return None
+        return self._row_to_memory_trace(rows[0])
 
     async def has_communities(self, user_id: str) -> bool:
         """判断当前用户是否已有社区。"""
@@ -1778,6 +1900,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 UNWIND $events AS row
                 MERGE (event:Event {id: row.id, user_id: row.user_id})
                 SET event.title = row.title,
+                    event.dialogue_id = row.dialogue_id,
                     event.description = row.description,
                     event.event_time = row.event_time,
                     event.created_at = coalesce(event.created_at, row.created_at)
@@ -2042,5 +2165,105 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 )
                 for participant in row.get("participants") or []
                 if participant.get("entity_id")
+            ],
+        )
+
+    @staticmethod
+    def _row_to_memory_trace(row: dict[str, Any]) -> MemoryTraceResult:
+        """把 Neo4j 聚合行转换为单条记忆图谱溯源。"""
+        dialogue = row.get("dialogue") or {}
+        return MemoryTraceResult(
+            dialogue=MemoryTraceDialogueResult(
+                id=str(dialogue.get("id") or ""),
+                memory_id=str(dialogue.get("memory_id") or ""),
+                summary=dialogue.get("summary"),
+                created_at=dialogue.get("created_at"),
+            ),
+            chunks=[
+                MemoryTraceChunkResult(
+                    id=str(chunk.get("id") or ""),
+                    index=int(chunk.get("index") or 0),
+                    text=str(chunk.get("text") or ""),
+                )
+                for chunk in row.get("chunks") or []
+                if chunk.get("id")
+            ],
+            statements=[
+                MemoryTraceStatementResult(
+                    id=str(statement.get("id") or ""),
+                    chunk_id=str(statement.get("chunk_id") or ""),
+                    index=int(statement.get("index") or 0),
+                    text=str(statement.get("text") or ""),
+                    statement_type=str(statement.get("statement_type") or "FACT"),
+                    temporal_type=str(statement.get("temporal_type") or "STATIC"),
+                    importance=float(statement.get("importance") or 0.5),
+                    confidence=float(statement.get("confidence") or 0.8),
+                    valid_at=statement.get("valid_at"),
+                    invalid_at=statement.get("invalid_at"),
+                    memory_layer=str(
+                        statement.get("memory_layer") or "short_term"
+                    ),
+                )
+                for statement in row.get("statements") or []
+                if statement.get("id")
+            ],
+            entities=[
+                MemoryTraceEntityResult(
+                    id=str(entity.get("id") or ""),
+                    name=str(entity.get("name") or ""),
+                    type=str(entity.get("type") or ""),
+                    description=str(entity.get("description") or ""),
+                    importance=float(entity.get("importance") or 0.5),
+                    confidence=float(entity.get("confidence") or 0.8),
+                    memory_layer=str(entity.get("memory_layer") or "short_term"),
+                )
+                for entity in row.get("entities") or []
+                if entity.get("id")
+            ],
+            mentions=[
+                MemoryTraceMentionResult(
+                    id=str(mention.get("id") or ""),
+                    statement_id=str(mention.get("statement_id") or ""),
+                    entity_id=str(mention.get("entity_id") or ""),
+                )
+                for mention in row.get("mentions") or []
+                if mention.get("id")
+            ],
+            relations=[
+                MemoryTraceRelationResult(
+                    id=str(relation.get("id") or ""),
+                    source_entity_id=str(relation.get("source_entity_id") or ""),
+                    source_name=str(relation.get("source_name") or ""),
+                    target_entity_id=str(relation.get("target_entity_id") or ""),
+                    target_name=str(relation.get("target_name") or ""),
+                    name=str(relation.get("name") or ""),
+                    evidence=str(relation.get("evidence") or ""),
+                    statement_id=str(relation.get("statement_id") or ""),
+                    valid_at=relation.get("valid_at"),
+                    invalid_at=relation.get("invalid_at"),
+                    is_current=bool(relation.get("is_current", True)),
+                )
+                for relation in row.get("relations") or []
+                if relation.get("id")
+            ],
+            events=[
+                MemoryTraceEventResult(
+                    id=str(event.get("id") or ""),
+                    title=str(event.get("title") or ""),
+                    description=str(event.get("description") or ""),
+                    event_time=event.get("event_time"),
+                    created_at=event.get("created_at"),
+                    participants=[
+                        MemoryTimelineParticipantResult(
+                            entity_id=str(participant.get("entity_id") or ""),
+                            name=str(participant.get("name") or ""),
+                            type=str(participant.get("type") or ""),
+                        )
+                        for participant in event.get("participants") or []
+                        if participant.get("entity_id")
+                    ],
+                )
+                for event in row.get("events") or []
+                if event.get("id")
             ],
         )

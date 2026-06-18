@@ -6,7 +6,11 @@ from app.domain.external.embedding import EmbeddingModel
 from app.domain.external.json_parser import JSONParser
 from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
-from app.domain.models.long_term_memory import LongTermMemory, MemorySource
+from app.domain.models.long_term_memory import (
+    LongTermMemory,
+    MemoryDetailResult,
+    MemorySource,
+)
 from app.domain.models.memory_graph import (
     MEMORY_QUALITY_ISSUE_CATEGORIES,
     MemoryConsolidationStats,
@@ -122,6 +126,36 @@ class MemoryService:
         """删除当前用户记忆。"""
         if not await self._memory.delete_memory(memory_id):
             raise NotFoundError("记忆不存在或无权访问")
+
+    async def detail(self, memory_id: str) -> MemoryDetailResult:
+        """读取当前用户单条长期记忆及其图谱溯源详情。"""
+        async with self._uow_factory() as uow:
+            memory = await uow.memory.get_by_user(self._user_id, memory_id)
+        if memory is None:
+            raise NotFoundError("记忆不存在或无权访问")
+        if not self._graph_repository:
+            return MemoryDetailResult(
+                **memory.model_dump(mode="python"),
+                graph_available=False,
+                trace=None,
+            )
+        try:
+            trace = await self._graph_repository.memory_trace(
+                self._user_id,
+                memory_id,
+            )
+        except Exception as e:
+            logger.warning("记忆图谱溯源查询失败，返回 PG 详情: %s", e)
+            return MemoryDetailResult(
+                **memory.model_dump(mode="python"),
+                graph_available=False,
+                trace=None,
+            )
+        return MemoryDetailResult(
+            **memory.model_dump(mode="python"),
+            graph_available=True,
+            trace=trace,
+        )
 
     async def consolidate(self) -> MemoryConsolidationStats:
         """手动执行当前用户记忆巩固。"""

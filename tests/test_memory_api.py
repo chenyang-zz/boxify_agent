@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.application.errors.exceptions import NotFoundError
 from app.application.services.auth_service import AuthService
 from app.application.services.memory_service import MemoryService
+from app.domain.models.long_term_memory import LongTermMemory, MemoryStatus
 from app.domain.models.memory_graph import (
     CommunityMemberResult,
     CommunityRelationResult,
@@ -27,6 +28,8 @@ from app.domain.models.memory_graph import (
     MemoryQualityOverviewResult,
     MemoryReflectStats,
     MemoryRelationHistoryResult,
+    MemoryTraceDialogueResult,
+    MemoryTraceResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
 )
@@ -44,11 +47,13 @@ def test_memory_routes_require_token():
     quality_issues_response = client.get(
         "/api/memories/quality/issues?category=duplicate_entities"
     )
+    detail_response = client.get("/api/memories/memory-1")
 
     assert response.status_code == 401
     assert response.json()["code"] == 401
     assert quality_response.status_code == 401
     assert quality_issues_response.status_code == 401
+    assert detail_response.status_code == 401
 
 
 def test_create_and_search_memory_for_current_user(monkeypatch):
@@ -640,6 +645,48 @@ def test_memory_quality_endpoints_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_memory_detail_endpoint_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeDetailMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+
+    response = client.get(
+        "/api/memories/memory-1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    missing_response = client.get(
+        "/api/memories/missing",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == "memory-1"
+    assert response.json()["data"]["content"] == "用户喜欢周杰伦。"
+    assert response.json()["data"]["status"] == "completed"
+    assert response.json()["data"]["graph_available"] is True
+    assert response.json()["data"]["trace"]["dialogue"]["id"] == "dialogue-1"
+    assert missing_response.status_code == 404
+    assert missing_response.json()["msg"] == "记忆不存在或无权访问"
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -688,6 +735,32 @@ class MemoryApiUnitOfWork:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return None
+
+
+class FakeDetailMemoryService:
+    async def detail(self, memory_id):
+        from app.domain.models.long_term_memory import MemoryDetailResult
+
+        if memory_id == "missing":
+            raise NotFoundError("记忆不存在或无权访问")
+        memory = LongTermMemory(
+                id="memory-1",
+                user_id="user-a",
+                content="用户喜欢周杰伦。",
+                status=MemoryStatus.COMPLETED,
+                summary="用户喜欢周杰伦。",
+        )
+        return MemoryDetailResult(
+            **memory.model_dump(mode="python"),
+            graph_available=True,
+            trace=MemoryTraceResult(
+                dialogue=MemoryTraceDialogueResult(
+                    id="dialogue-1",
+                    memory_id="memory-1",
+                    summary="用户喜欢周杰伦。",
+                )
+            ),
+        )
 
 
 class FakeConsolidateMemoryService:

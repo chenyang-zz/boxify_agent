@@ -140,6 +140,7 @@ async def test_memory_graph_extractor_writes_four_layer_graph_with_deduped_entit
     assert graph.relations[0].source_entity_id == graph.relations[1].source_entity_id
     assert len(graph.events) == 1
     assert graph.events[0].title == "参加周杰伦演唱会"
+    assert graph.events[0].dialogue_id == graph.dialogue.id
     assert graph.events[0].event_time.isoformat() == "2026-06-15T20:00:00"
     assert {(edge.event_id, edge.entity_id) for edge in graph.involves} == {
         (graph.events[0].id, graph.relations[0].source_entity_id),

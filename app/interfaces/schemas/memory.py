@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.models.long_term_memory import (
     LongTermMemory,
+    MemoryDetailResult,
     MemorySource,
     MemoryStatus,
 )
@@ -116,6 +117,98 @@ class MemoryTimelineEventResponse(BaseModel):
     event_time: datetime | None = None
     created_at: datetime | None = None
     participants: list[MemoryTimelineParticipantResponse]
+
+
+class MemoryTraceDialogueResponse(BaseModel):
+    """单条记忆溯源 Dialogue 响应。"""
+
+    id: str
+    memory_id: str
+    summary: str | None = None
+    created_at: datetime | None = None
+
+
+class MemoryTraceChunkResponse(BaseModel):
+    """单条记忆溯源 Chunk 响应。"""
+
+    id: str
+    index: int = 0
+    text: str = ""
+
+
+class MemoryTraceStatementResponse(BaseModel):
+    """单条记忆溯源 Statement 响应。"""
+
+    id: str
+    chunk_id: str
+    index: int = 0
+    text: str = ""
+    statement_type: str = "FACT"
+    temporal_type: str = "STATIC"
+    importance: float = 0.5
+    confidence: float = 0.8
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    memory_layer: str = "short_term"
+
+
+class MemoryTraceEntityResponse(BaseModel):
+    """单条记忆溯源 Entity 响应。"""
+
+    id: str
+    name: str
+    type: str
+    description: str = ""
+    importance: float = 0.5
+    confidence: float = 0.8
+    memory_layer: str = "short_term"
+
+
+class MemoryTraceMentionResponse(BaseModel):
+    """单条记忆溯源 MENTIONS 边响应。"""
+
+    id: str
+    statement_id: str
+    entity_id: str
+
+
+class MemoryTraceRelationResponse(BaseModel):
+    """单条记忆溯源 RELATION 边响应。"""
+
+    id: str
+    source_entity_id: str
+    source_name: str
+    target_entity_id: str
+    target_name: str
+    name: str
+    evidence: str = ""
+    statement_id: str
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
+
+
+class MemoryTraceEventResponse(BaseModel):
+    """单条记忆溯源 Event 响应。"""
+
+    id: str
+    title: str
+    description: str = ""
+    event_time: datetime | None = None
+    created_at: datetime | None = None
+    participants: list[MemoryTimelineParticipantResponse] = Field(default_factory=list)
+
+
+class MemoryTraceResponse(BaseModel):
+    """单条长期记忆完整图谱溯源响应。"""
+
+    dialogue: MemoryTraceDialogueResponse
+    chunks: list[MemoryTraceChunkResponse] = Field(default_factory=list)
+    statements: list[MemoryTraceStatementResponse] = Field(default_factory=list)
+    entities: list[MemoryTraceEntityResponse] = Field(default_factory=list)
+    mentions: list[MemoryTraceMentionResponse] = Field(default_factory=list)
+    relations: list[MemoryTraceRelationResponse] = Field(default_factory=list)
+    events: list[MemoryTraceEventResponse] = Field(default_factory=list)
 
 
 class MemoryGraphNodeResponse(BaseModel):
@@ -338,4 +431,16 @@ class MemoryResponse(BaseModel):
     @classmethod
     def from_domain(cls, memory: LongTermMemory) -> "MemoryResponse":
         """从领域模型构造响应。"""
+        return cls.model_validate(memory.model_dump(mode="python"))
+
+
+class MemoryDetailResponse(MemoryResponse):
+    """单条长期记忆详情响应。"""
+
+    graph_available: bool = True
+    trace: MemoryTraceResponse | None = None
+
+    @classmethod
+    def from_domain(cls, memory: MemoryDetailResult) -> "MemoryDetailResponse":
+        """从领域详情模型构造响应。"""
         return cls.model_validate(memory.model_dump(mode="python"))

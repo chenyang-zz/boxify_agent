@@ -86,6 +86,7 @@ class EventNode(BaseModel):
 
     id: str
     user_id: str
+    dialogue_id: str | None = None
     title: str
     description: str = ""
     event_time: datetime | None = None
@@ -422,6 +423,98 @@ class MemoryTimelineEventResult(BaseModel):
     event_time: datetime | None = None
     created_at: datetime | None = None
     participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
+
+
+class MemoryTraceDialogueResult(BaseModel):
+    """单条记忆图谱溯源中的 Dialogue 节点。"""
+
+    id: str
+    memory_id: str
+    summary: str | None = None
+    created_at: datetime | None = None
+
+
+class MemoryTraceChunkResult(BaseModel):
+    """单条记忆图谱溯源中的 Chunk 节点。"""
+
+    id: str
+    index: int = 0
+    text: str = ""
+
+
+class MemoryTraceStatementResult(BaseModel):
+    """单条记忆图谱溯源中的 Statement 节点。"""
+
+    id: str
+    chunk_id: str
+    index: int = 0
+    text: str = ""
+    statement_type: str = "FACT"
+    temporal_type: str = "STATIC"
+    importance: float = 0.5
+    confidence: float = 0.8
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    memory_layer: str = "short_term"
+
+
+class MemoryTraceEntityResult(BaseModel):
+    """单条记忆图谱溯源中的 Entity 节点。"""
+
+    id: str
+    name: str
+    type: str
+    description: str = ""
+    importance: float = 0.5
+    confidence: float = 0.8
+    memory_layer: str = "short_term"
+
+
+class MemoryTraceMentionResult(BaseModel):
+    """单条记忆图谱溯源中的 MENTIONS 边。"""
+
+    id: str
+    statement_id: str
+    entity_id: str
+
+
+class MemoryTraceRelationResult(BaseModel):
+    """单条记忆图谱溯源中的 RELATION 边。"""
+
+    id: str
+    source_entity_id: str
+    source_name: str
+    target_entity_id: str
+    target_name: str
+    name: str
+    evidence: str = ""
+    statement_id: str
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+    is_current: bool = True
+
+
+class MemoryTraceEventResult(BaseModel):
+    """单条记忆图谱溯源中的 Event 节点。"""
+
+    id: str
+    title: str
+    description: str = ""
+    event_time: datetime | None = None
+    created_at: datetime | None = None
+    participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
+
+
+class MemoryTraceResult(BaseModel):
+    """单条长期记忆对应的完整图谱溯源。"""
+
+    dialogue: MemoryTraceDialogueResult
+    chunks: list[MemoryTraceChunkResult] = Field(default_factory=list)
+    statements: list[MemoryTraceStatementResult] = Field(default_factory=list)
+    entities: list[MemoryTraceEntityResult] = Field(default_factory=list)
+    mentions: list[MemoryTraceMentionResult] = Field(default_factory=list)
+    relations: list[MemoryTraceRelationResult] = Field(default_factory=list)
+    events: list[MemoryTraceEventResult] = Field(default_factory=list)
 
 
 class MemoryGraphNodeResult(BaseModel):

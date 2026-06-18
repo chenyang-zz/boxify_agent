@@ -21,6 +21,7 @@ from app.domain.models.memory_graph import (
     MemoryQualityIssueSummaryResult,
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
+    MemoryTraceResult,
 )
 
 
@@ -250,4 +251,10 @@ class MemoryGraphRepository(Protocol):
         self, user_id: str, limit: int
     ) -> list[MemoryTimelineEventResult]:
         """返回当前用户事件时间线。"""
+        ...
+
+    async def memory_trace(
+        self, user_id: str, memory_id: str
+    ) -> MemoryTraceResult | None:
+        """读取当前用户单条 PG 记忆对应的图谱溯源。"""
         ...

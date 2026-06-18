@@ -12,6 +12,7 @@ from app.interfaces.schemas.memory import (
     MemoryCommunityResponse,
     MemoryConsolidateResponse,
     MemoryCreateRequest,
+    MemoryDetailResponse,
     MemoryEntitySubgraphResponse,
     MemoryGraphViewResponse,
     MemoryInsightResponse,
@@ -369,6 +370,21 @@ async def list_memory_timeline(
             for event in events
         ]
     )
+
+
+@router.get(
+    "/{memory_id}",
+    response_model=Response[MemoryDetailResponse],
+    summary="查询记忆详情",
+    description="查询当前用户指定长期记忆及其图谱溯源详情。",
+)
+async def get_memory_detail(
+    memory_id: str,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """查询当前用户单条长期记忆详情。"""
+    detail = await memory_service.detail(memory_id)
+    return Response.success(data=MemoryDetailResponse.from_domain(detail))
 
 
 @router.post(

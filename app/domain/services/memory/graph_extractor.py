@@ -220,6 +220,7 @@ class MemoryGraphExtractor:
                     extracted.description.strip(),
                 ),
                 user_id=dialogue.user_id,
+                dialogue_id=dialogue.id,
                 title=title,
                 description=extracted.description.strip(),
                 event_time=event_time,

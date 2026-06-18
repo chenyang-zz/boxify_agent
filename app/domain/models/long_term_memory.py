@@ -4,7 +4,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from app.domain.models.memory_graph import LongTermMemoryGraphData, MemoryGraphStats
+from app.domain.models.memory_graph import (
+    LongTermMemoryGraphData,
+    MemoryGraphStats,
+    MemoryTraceResult,
+)
 
 
 class MemorySource(str, Enum):
@@ -66,3 +70,10 @@ class LongTermMemory(BaseModel):
         """标记记忆处理失败。"""
         self.status = MemoryStatus.FAILED
         self.error_msg = error_msg[:500]
+
+
+class MemoryDetailResult(LongTermMemory):
+    """单条长期记忆详情，包含 PG 记录和可选图谱溯源。"""
+
+    graph_available: bool = True
+    trace: MemoryTraceResult | None = None

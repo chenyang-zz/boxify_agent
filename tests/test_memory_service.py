@@ -27,6 +27,8 @@ from app.domain.models.memory_graph import (
     MemoryQualityIssueListResult,
     MemoryQualityIssueResult,
     MemoryQualityIssueSummaryResult,
+    MemoryTraceDialogueResult,
+    MemoryTraceResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
 )
@@ -627,6 +629,84 @@ async def test_application_memory_service_returns_quality_overview():
 
 
 @pytest.mark.anyio
+async def test_application_memory_service_returns_memory_detail_with_trace():
+    memory_repository = InMemoryMemoryRepository()
+    memory = LongTermMemory(
+        id="memory-1",
+        user_id="user-a",
+        content="用户喜欢周杰伦。",
+        status=MemoryStatus.COMPLETED,
+        summary="用户喜欢周杰伦。",
+        graph_dialogue_id="dialogue-1",
+    )
+    await memory_repository.save(memory)
+    repository = FakeTraceGraphRepository()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(memory_repository),
+        user_id="user-a",
+        graph_repository=repository,
+    )
+
+    detail = await service.detail("memory-1")
+
+    assert detail.id == "memory-1"
+    assert detail.content == "用户喜欢周杰伦。"
+    assert detail.graph_available is True
+    assert detail.trace == MemoryTraceResult(
+        dialogue=MemoryTraceDialogueResult(
+            id="dialogue-1",
+            memory_id="memory-1",
+            summary="用户喜欢周杰伦。",
+        )
+    )
+    assert repository.calls == [("memory_trace", "user-a", "memory-1")]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_detail_keeps_pg_when_graph_unavailable():
+    memory_repository = InMemoryMemoryRepository()
+    memory = LongTermMemory(
+        id="memory-1",
+        user_id="user-a",
+        content="待萃取记忆",
+        status=MemoryStatus.PENDING,
+    )
+    await memory_repository.save(memory)
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(memory_repository),
+        user_id="user-a",
+        graph_repository=ExplodingTraceGraphRepository(),
+    )
+
+    detail = await service.detail("memory-1")
+
+    assert detail.id == "memory-1"
+    assert detail.graph_available is False
+    assert detail.trace is None
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_detail_raises_not_found_for_cross_user_memory():
+    memory_repository = InMemoryMemoryRepository()
+    await memory_repository.save(
+        LongTermMemory(
+            id="memory-other",
+            user_id="user-b",
+            content="其他用户记忆",
+        )
+    )
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(memory_repository),
+        user_id="user-a",
+        graph_repository=FakeTraceGraphRepository(),
+    )
+
+    with pytest.raises(NotFoundError) as exc:
+        await service.detail("memory-other")
+    assert exc.value.msg == "记忆不存在或无权访问"
+
+
+@pytest.mark.anyio
 async def test_application_memory_service_keeps_pg_quality_when_graph_unavailable():
     memory_repository = InMemoryMemoryRepository()
     failed = LongTermMemory(user_id="user-a", content="失败记忆")
@@ -1112,6 +1192,28 @@ class FakeQualityGraphRepository(FakeGraphRepository):
 
 class ExplodingQualityGraphRepository(FakeQualityGraphRepository):
     async def quality_graph_counts(self, user_id):
+        raise RuntimeError("neo4j unavailable")
+
+
+class FakeTraceGraphRepository(FakeGraphRepository):
+    def __init__(self, trace=None):
+        super().__init__([])
+        self.trace = trace or MemoryTraceResult(
+            dialogue=MemoryTraceDialogueResult(
+                id="dialogue-1",
+                memory_id="memory-1",
+                summary="用户喜欢周杰伦。",
+            )
+        )
+        self.calls = []
+
+    async def memory_trace(self, user_id, memory_id):
+        self.calls.append(("memory_trace", user_id, memory_id))
+        return self.trace
+
+
+class ExplodingTraceGraphRepository(FakeTraceGraphRepository):
+    async def memory_trace(self, user_id, memory_id):
         raise RuntimeError("neo4j unavailable")
 
 
