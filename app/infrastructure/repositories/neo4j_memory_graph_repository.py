@@ -10,6 +10,8 @@ from app.domain.models.memory_graph import (
     EntityNode,
     GraphRelationFact,
     InsightResult,
+    MemoryActiveRecallCommunityResult,
+    MemoryActiveRecallEventResult,
     MemoryEntitySubgraphResult,
     MemoryGraph,
     MemoryGraphEdgeResult,
@@ -37,6 +39,7 @@ from app.domain.models.memory_graph import (
     stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
+from app.utils.vector import average_vector, cosine_similarity
 
 _VECTOR_WEIGHT = 0.55
 _FULLTEXT_WEIGHT = 0.30
@@ -44,6 +47,21 @@ _IMPORTANCE_WEIGHT = 0.15
 _LONG_TERM_BONUS = 0.05
 
 logger = logging.getLogger(__name__)
+
+
+def _event_text_score(row: dict[str, Any], normalized_query: str) -> float:
+    """用标题/描述做轻量文本相关性评分。"""
+    if not normalized_query:
+        return 0.0
+    text = f"{row.get('title') or ''} {row.get('description') or ''}".lower()
+    if not text.strip():
+        return 0.0
+    if normalized_query in text:
+        return 1.0
+    tokens = [token for token in normalized_query.split() if token]
+    if tokens and any(token in text for token in tokens):
+        return 0.8
+    return 0.0
 
 
 class Neo4jMemoryGraphRepository(MemoryGraphRepository):
@@ -432,6 +450,91 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             )
             rows = await result.data()
         return [self._row_to_insight_result(row) for row in rows]
+
+    async def search_communities_by_vector(
+        self, user_id: str, query_embedding: list[float], top_k: int
+    ) -> list[MemoryActiveRecallCommunityResult]:
+        """用社区成员平均向量召回当前用户相关主题社区。"""
+        communities = {
+            community.id: community for community in await self.list_communities(user_id)
+        }
+        entities = await self.community_vote_entities(user_id)
+        embeddings_by_community: dict[str, list[list[float]]] = {}
+        for entity in entities:
+            if entity.community_id and entity.embedding:
+                embeddings_by_community.setdefault(entity.community_id, []).append(
+                    entity.embedding
+                )
+        results: list[MemoryActiveRecallCommunityResult] = []
+        for community_id, embeddings in embeddings_by_community.items():
+            community = communities.get(community_id)
+            if not community:
+                continue
+            score = cosine_similarity(average_vector(embeddings), query_embedding)
+            if score <= 0:
+                continue
+            results.append(
+                MemoryActiveRecallCommunityResult(
+                    id=community.id,
+                    name=community.name,
+                    summary=community.summary,
+                    member_count=community.member_count,
+                    score=score,
+                )
+            )
+        return sorted(results, key=lambda item: item.score, reverse=True)[:top_k]
+
+    async def search_events_by_vector_or_text(
+        self, user_id: str, query: str, query_embedding: list[float], top_k: int
+    ) -> list[MemoryActiveRecallEventResult]:
+        """用标题描述文本或参与实体平均向量召回当前用户相关经历事件。"""
+        cypher = """
+        MATCH (event:Event {user_id: $user_id})
+        OPTIONAL MATCH (event)-[:INVOLVES {user_id: $user_id}]->
+            (entity:Entity {user_id: $user_id})
+        WITH event,
+             collect({
+                 entity_id: entity.id,
+                 name: entity.name,
+                 type: entity.type,
+                 embedding: coalesce(entity.embedding, [])
+             }) AS raw_participants
+        RETURN event.id AS id,
+               event.title AS title,
+               event.description AS description,
+               toString(event.event_time) AS event_time,
+               toString(event.created_at) AS created_at,
+               [p IN raw_participants WHERE p.entity_id IS NOT NULL] AS participants
+        ORDER BY coalesce(event.event_time, event.created_at) DESC
+        LIMIT 100
+        """
+        async with self._driver.session(database=self._database) as session:
+            result = await session.run(cypher, user_id=user_id)
+            rows = await result.data()
+        normalized_query = query.strip().lower()
+        results: list[MemoryActiveRecallEventResult] = []
+        for row in rows:
+            text_score = _event_text_score(row, normalized_query)
+            participant_embeddings = [
+                participant.get("embedding")
+                for participant in row.get("participants") or []
+                if participant.get("embedding")
+            ]
+            vector_score = cosine_similarity(
+                average_vector(participant_embeddings),
+                query_embedding,
+            )
+            score = max(text_score, vector_score)
+            if score <= 0:
+                continue
+            event = self._row_to_timeline_event(row)
+            results.append(
+                MemoryActiveRecallEventResult(
+                    **event.model_dump(mode="python"),
+                    score=score,
+                )
+            )
+        return sorted(results, key=lambda item: item.score, reverse=True)[:top_k]
 
     async def list_insights(self, user_id: str) -> list[InsightResult]:
         """列出用户洞察。"""

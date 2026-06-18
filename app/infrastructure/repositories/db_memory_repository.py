@@ -123,6 +123,31 @@ class DBMemoryRepository(MemoryRepository):
             for record in records
         ]
 
+    async def list_reextract_candidates(
+        self,
+        user_id: str,
+        memory_ids: list[str] | None,
+        statuses: list[MemoryStatus] | None,
+        only_missing_graph: bool,
+        limit: int,
+    ) -> list[LongTermMemory]:
+        """选择当前用户需要重新派发图谱萃取的记忆，不修改记录状态。"""
+        conditions = [MemoryModel.user_id == user_id]
+        if memory_ids is not None:
+            conditions.append(MemoryModel.id.in_(memory_ids))
+        if statuses is not None:
+            conditions.append(MemoryModel.status.in_(statuses))
+        if only_missing_graph:
+            conditions.append(MemoryModel.graph_dialogue_id.is_(None))
+        stmt = (
+            select(MemoryModel)
+            .where(*conditions)
+            .order_by(MemoryModel.updated_at.desc(), MemoryModel.created_at.desc())
+            .limit(limit)
+        )
+        records = (await self.db_session.execute(stmt)).scalars().all()
+        return [record.to_domain() for record in records]
+
     async def _get_record(self, memory_id: str) -> MemoryModel | None:
         """按主键读取原始 ORM 记录，供仓储内部更新前复用。"""
         stmt = select(MemoryModel).where(MemoryModel.id == memory_id)

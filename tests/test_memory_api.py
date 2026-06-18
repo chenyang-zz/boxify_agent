@@ -33,6 +33,10 @@ from app.domain.models.memory_graph import (
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
 )
+from app.domain.models.long_term_memory import (
+    MemoryReextractItemResult,
+    MemoryReextractResult,
+)
 from app.domain.models.user import User
 from app.interfaces import service_dependencies
 from app.main import app
@@ -48,12 +52,16 @@ def test_memory_routes_require_token():
         "/api/memories/quality/issues?category=duplicate_entities"
     )
     detail_response = client.get("/api/memories/memory-1")
+    batch_reextract_response = client.post("/api/memories/reextract")
+    single_reextract_response = client.post("/api/memories/memory-1/reextract")
 
     assert response.status_code == 401
     assert response.json()["code"] == 401
     assert quality_response.status_code == 401
     assert quality_issues_response.status_code == 401
     assert detail_response.status_code == 401
+    assert batch_reextract_response.status_code == 401
+    assert single_reextract_response.status_code == 401
 
 
 def test_create_and_search_memory_for_current_user(monkeypatch):
@@ -687,6 +695,68 @@ def test_memory_detail_endpoint_for_current_user(monkeypatch):
     app.dependency_overrides.clear()
 
 
+def test_memory_reextract_endpoints_for_current_user(monkeypatch):
+    user_repository = InMemoryUserRepository()
+    user_repository.seed_user("alice", "alice-password", user_id="user-a")
+    memory_repository = InMemoryMemoryRepository()
+
+    def uow_factory():
+        return MemoryApiUnitOfWork(user_repository, memory_repository)
+
+    monkeypatch.setattr(service_dependencies, "get_uow", uow_factory)
+    app.dependency_overrides[service_dependencies.get_auth_service] = lambda: AuthService(
+        uow_factory=uow_factory,
+        secret_key="secret",
+    )
+    app.dependency_overrides[service_dependencies.get_memory_service] = (
+        lambda: FakeReextractMemoryService()
+    )
+    client = TestClient(app)
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "alice", "password": "alice-password"},
+    ).json()["data"]["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    batch_response = client.post(
+        "/api/memories/reextract",
+        headers=headers,
+        json={"dry_run": True, "statuses": ["failed"], "limit": 20},
+    )
+    single_response = client.post(
+        "/api/memories/memory-1/reextract",
+        headers=headers,
+    )
+    missing_response = client.post(
+        "/api/memories/missing/reextract",
+        headers=headers,
+    )
+
+    assert batch_response.status_code == 200
+    assert batch_response.json()["data"] == {
+        "matched": 1,
+        "dispatched": 0,
+        "skipped": 1,
+        "dry_run": True,
+        "items": [
+            {
+                "memory_id": "memory-failed",
+                "status": "failed",
+                "graph_dialogue_id": None,
+                "dispatched": False,
+                "error": None,
+            }
+        ],
+        "errors": [],
+    }
+    assert single_response.status_code == 200
+    assert single_response.json()["data"]["dispatched"] == 1
+    assert single_response.json()["data"]["items"][0]["memory_id"] == "memory-1"
+    assert missing_response.status_code == 404
+    assert missing_response.json()["msg"] == "记忆不存在或无权访问"
+    app.dependency_overrides.clear()
+
+
 class InMemoryUserRepository:
     def __init__(self):
         self.users_by_username = {}
@@ -760,6 +830,52 @@ class FakeDetailMemoryService:
                     summary="用户喜欢周杰伦。",
                 )
             ),
+        )
+
+
+class FakeReextractMemoryService:
+    async def reextract_memory(self, memory_id):
+        if memory_id == "missing":
+            raise NotFoundError("记忆不存在或无权访问")
+        return MemoryReextractResult(
+            matched=1,
+            dispatched=1,
+            skipped=0,
+            dry_run=False,
+            items=[
+                MemoryReextractItemResult(
+                    memory_id=memory_id,
+                    status=MemoryStatus.FAILED,
+                    dispatched=True,
+                )
+            ],
+        )
+
+    async def reextract_memories(
+        self,
+        memory_ids=None,
+        statuses=None,
+        only_missing_graph=False,
+        dry_run=False,
+        limit=100,
+    ):
+        assert memory_ids is None
+        assert statuses == [MemoryStatus.FAILED]
+        assert only_missing_graph is False
+        assert dry_run is True
+        assert limit == 20
+        return MemoryReextractResult(
+            matched=1,
+            dispatched=0,
+            skipped=1,
+            dry_run=True,
+            items=[
+                MemoryReextractItemResult(
+                    memory_id="memory-failed",
+                    status=MemoryStatus.FAILED,
+                    dispatched=False,
+                )
+            ],
         )
 
 

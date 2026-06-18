@@ -8,6 +8,8 @@ from app.domain.models.memory_graph import (
     CommunityVoteNeighbor,
     EntityNode,
     InsightResult,
+    MemoryActiveRecallCommunityResult,
+    MemoryActiveRecallEventResult,
     MemoryEntitySubgraphResult,
     MemoryGraph,
     MemoryGraphEdgeResult,
@@ -113,6 +115,18 @@ class MemoryGraphRepository(Protocol):
         self, user_id: str, query_embedding: list[float], top_k: int
     ) -> list[InsightResult]:
         """按向量检索当前用户洞察。"""
+        ...
+
+    async def search_communities_by_vector(
+        self, user_id: str, query_embedding: list[float], top_k: int
+    ) -> list[MemoryActiveRecallCommunityResult]:
+        """按社区成员平均向量检索当前用户主题社区。"""
+        ...
+
+    async def search_events_by_vector_or_text(
+        self, user_id: str, query: str, query_embedding: list[float], top_k: int
+    ) -> list[MemoryActiveRecallEventResult]:
+        """按参与实体向量或标题描述文本检索当前用户经历事件。"""
         ...
 
     async def list_insights(self, user_id: str) -> list[InsightResult]:

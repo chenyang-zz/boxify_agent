@@ -9,7 +9,10 @@ from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.long_term_memory import (
     LongTermMemory,
     MemoryDetailResult,
+    MemoryReextractItemResult,
+    MemoryReextractResult,
     MemorySource,
+    MemoryStatus,
 )
 from app.domain.models.memory_graph import (
     MEMORY_QUALITY_ISSUE_CATEGORIES,
@@ -45,6 +48,7 @@ from app.domain.services.memory import (
     MemoryProfileSummarizer,
     MemoryReflector,
 )
+from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +68,7 @@ class MemoryService:
     ) -> None:
         self._uow_factory = uow_factory
         self._user_id = user_id
+        self._task_dispatcher = task_dispatcher
         self._graph_repository = graph_repository
         self._embedding = embedding
         self._profile_summarizer = (
@@ -126,6 +131,99 @@ class MemoryService:
         """删除当前用户记忆。"""
         if not await self._memory.delete_memory(memory_id):
             raise NotFoundError("记忆不存在或无权访问")
+
+    async def reextract_memory(self, memory_id: str) -> MemoryReextractResult:
+        """重新派发当前用户单条记忆的图谱萃取任务。"""
+        async with self._uow_factory() as uow:
+            memory = await uow.memory.get_by_user(self._user_id, memory_id)
+        if memory is None:
+            raise NotFoundError("记忆不存在或无权访问")
+        if not self._task_dispatcher:
+            raise BadRequestError("记忆任务派发器不可用")
+        try:
+            await self._task_dispatcher.dispatch_extract_memory(memory.id)
+        except Exception as e:
+            logger.warning("记忆重萃取派发失败: %s", e)
+            raise BadRequestError("记忆重萃取派发失败") from e
+        return MemoryReextractResult(
+            matched=1,
+            dispatched=1,
+            skipped=0,
+            dry_run=False,
+            items=[
+                MemoryReextractItemResult(
+                    memory_id=memory.id,
+                    status=memory.status,
+                    graph_dialogue_id=memory.graph_dialogue_id,
+                    dispatched=True,
+                )
+            ],
+        )
+
+    async def reextract_memories(
+        self,
+        memory_ids: list[str] | None = None,
+        statuses: list[MemoryStatus] | None = None,
+        only_missing_graph: bool = False,
+        dry_run: bool = False,
+        limit: int | None = None,
+    ) -> MemoryReextractResult:
+        """批量选择当前用户 PG 记忆并重新派发图谱萃取任务。"""
+        if not dry_run and not self._task_dispatcher:
+            raise BadRequestError("记忆任务派发器不可用")
+        settings = get_settings()
+        normalized_limit = max(
+            1,
+            min(limit or settings.memory_reextract_batch_limit, 500),
+        )
+        normalized_statuses = statuses if statuses is not None else [MemoryStatus.FAILED]
+        async with self._uow_factory() as uow:
+            candidates = await uow.memory.list_reextract_candidates(
+                user_id=self._user_id,
+                memory_ids=memory_ids,
+                statuses=normalized_statuses,
+                only_missing_graph=only_missing_graph,
+                limit=normalized_limit,
+            )
+        items: list[MemoryReextractItemResult] = []
+        errors: list[str] = []
+        dispatched = 0
+        if dry_run:
+            return MemoryReextractResult(
+                matched=len(candidates),
+                dispatched=0,
+                skipped=len(candidates),
+                dry_run=True,
+                items=[
+                    _memory_to_reextract_item(memory, dispatched=False)
+                    for memory in candidates
+                ],
+            )
+        for memory in candidates:
+            try:
+                await self._task_dispatcher.dispatch_extract_memory(memory.id)
+            except Exception as e:
+                error = str(e)
+                logger.warning("记忆 %s 重萃取派发失败: %s", memory.id, error)
+                errors.append(f"{memory.id}: {error}")
+                items.append(
+                    _memory_to_reextract_item(
+                        memory,
+                        dispatched=False,
+                        error=error,
+                    )
+                )
+                continue
+            dispatched += 1
+            items.append(_memory_to_reextract_item(memory, dispatched=True))
+        return MemoryReextractResult(
+            matched=len(candidates),
+            dispatched=dispatched,
+            skipped=len(candidates) - dispatched,
+            dry_run=False,
+            items=items,
+            errors=errors,
+        )
 
     async def detail(self, memory_id: str) -> MemoryDetailResult:
         """读取当前用户单条长期记忆及其图谱溯源详情。"""
@@ -358,3 +456,19 @@ class MemoryService:
         except Exception as e:
             logger.warning("记忆质量问题查询失败: %s", e)
             raise BadRequestError("记忆图谱不可用，无法查询质量问题") from e
+
+
+def _memory_to_reextract_item(
+    memory: LongTermMemory,
+    *,
+    dispatched: bool,
+    error: str | None = None,
+) -> MemoryReextractItemResult:
+    """把 PG 记忆转换为重萃取候选项。"""
+    return MemoryReextractItemResult(
+        memory_id=memory.id,
+        status=memory.status,
+        graph_dialogue_id=memory.graph_dialogue_id,
+        dispatched=dispatched,
+        error=error,
+    )

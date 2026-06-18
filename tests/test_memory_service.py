@@ -759,6 +759,160 @@ async def test_application_memory_service_rejects_unknown_quality_issue_category
 
 
 @pytest.mark.anyio
+async def test_application_memory_service_reextracts_single_memory_for_current_user():
+    repository = InMemoryMemoryRepository()
+    await repository.save(
+        LongTermMemory(
+            id="memory-1",
+            user_id="user-a",
+            content="失败记忆",
+            status=MemoryStatus.FAILED,
+        )
+    )
+    dispatcher = FakeTaskDispatcher()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        user_id="user-a",
+        task_dispatcher=dispatcher,
+    )
+
+    result = await service.reextract_memory("memory-1")
+
+    assert result.matched == 1
+    assert result.dispatched == 1
+    assert result.skipped == 0
+    assert result.items[0].memory_id == "memory-1"
+    assert result.items[0].status == MemoryStatus.FAILED
+    assert result.items[0].dispatched is True
+    assert dispatcher.extract_memory_calls == ["memory-1"]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_reextract_requires_dispatcher():
+    repository = InMemoryMemoryRepository()
+    await repository.save(
+        LongTermMemory(id="memory-1", user_id="user-a", content="失败记忆")
+    )
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        user_id="user-a",
+    )
+
+    with pytest.raises(BadRequestError) as exc:
+        await service.reextract_memory("memory-1")
+
+    assert exc.value.msg == "记忆任务派发器不可用"
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_batch_reextract_defaults_to_failed_and_dry_run():
+    repository = InMemoryMemoryRepository()
+    failed = LongTermMemory(
+        id="failed-1",
+        user_id="user-a",
+        content="失败记忆",
+        status=MemoryStatus.FAILED,
+    )
+    pending = LongTermMemory(
+        id="pending-1",
+        user_id="user-a",
+        content="待处理记忆",
+        status=MemoryStatus.PENDING,
+    )
+    other_user_failed = LongTermMemory(
+        id="other-1",
+        user_id="user-b",
+        content="其他用户失败记忆",
+        status=MemoryStatus.FAILED,
+    )
+    for memory in [failed, pending, other_user_failed]:
+        await repository.save(memory)
+    dispatcher = FakeTaskDispatcher()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        user_id="user-a",
+        task_dispatcher=dispatcher,
+    )
+
+    result = await service.reextract_memories(dry_run=True)
+
+    assert result.dry_run is True
+    assert result.matched == 1
+    assert result.dispatched == 0
+    assert result.skipped == 1
+    assert [item.memory_id for item in result.items] == ["failed-1"]
+    assert dispatcher.extract_memory_calls == []
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_batch_reextract_filters_missing_graph():
+    repository = InMemoryMemoryRepository()
+    missing_graph = LongTermMemory(
+        id="memory-missing",
+        user_id="user-a",
+        content="缺图谱记忆",
+        status=MemoryStatus.COMPLETED,
+        graph_dialogue_id=None,
+    )
+    has_graph = LongTermMemory(
+        id="memory-has-graph",
+        user_id="user-a",
+        content="已有图谱记忆",
+        status=MemoryStatus.COMPLETED,
+        graph_dialogue_id="dialogue-1",
+    )
+    for memory in [missing_graph, has_graph]:
+        await repository.save(memory)
+    dispatcher = FakeTaskDispatcher()
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        user_id="user-a",
+        task_dispatcher=dispatcher,
+    )
+
+    result = await service.reextract_memories(
+        statuses=[MemoryStatus.COMPLETED],
+        only_missing_graph=True,
+    )
+
+    assert result.matched == 1
+    assert result.dispatched == 1
+    assert [item.memory_id for item in result.items] == ["memory-missing"]
+    assert dispatcher.extract_memory_calls == ["memory-missing"]
+
+
+@pytest.mark.anyio
+async def test_application_memory_service_batch_reextract_records_dispatch_errors():
+    repository = InMemoryMemoryRepository()
+    for memory_id in ["memory-ok", "memory-fail"]:
+        await repository.save(
+            LongTermMemory(
+                id=memory_id,
+                user_id="user-a",
+                content=memory_id,
+                status=MemoryStatus.FAILED,
+            )
+        )
+    dispatcher = FailingTaskDispatcher(fail_memory_id="memory-fail")
+    service = MemoryService(
+        uow_factory=lambda: MemoryUnitOfWork(repository),
+        user_id="user-a",
+        task_dispatcher=dispatcher,
+    )
+
+    result = await service.reextract_memories()
+
+    assert result.matched == 2
+    assert result.dispatched == 1
+    assert result.skipped == 1
+    assert result.errors == ["memory-fail: dispatch failed"]
+    assert {item.memory_id: item.dispatched for item in result.items} == {
+        "memory-ok": True,
+        "memory-fail": False,
+    }
+
+
+@pytest.mark.anyio
 async def test_memory_community_clusterer_is_available_for_service_layer():
     repository = FakeCommunityServiceGraphRepository()
     clusterer = MemoryCommunityClusterer(user_id="user-a", graph_repository=repository)
@@ -834,6 +988,30 @@ class InMemoryMemoryRepository:
             for memory in failed[:limit]
         ]
 
+    async def list_reextract_candidates(
+        self,
+        user_id: str,
+        memory_ids=None,
+        statuses=None,
+        only_missing_graph: bool = False,
+        limit: int = 100,
+    ):
+        memories = [memory for memory in self.saved if memory.user_id == user_id]
+        if memory_ids is not None:
+            allowed_ids = set(memory_ids)
+            memories = [memory for memory in memories if memory.id in allowed_ids]
+        if statuses is not None:
+            allowed_statuses = {
+                status if isinstance(status, MemoryStatus) else MemoryStatus(status)
+                for status in statuses
+            }
+            memories = [
+                memory for memory in memories if memory.status in allowed_statuses
+            ]
+        if only_missing_graph:
+            memories = [memory for memory in memories if not memory.graph_dialogue_id]
+        return memories[:limit]
+
 
 class FakeTaskDispatcher:
     def __init__(self):
@@ -844,6 +1022,17 @@ class FakeTaskDispatcher:
 
     async def dispatch_extract_memory(self, memory_id: str) -> None:
         self.extract_memory_calls.append(memory_id)
+
+
+class FailingTaskDispatcher(FakeTaskDispatcher):
+    def __init__(self, fail_memory_id: str):
+        super().__init__()
+        self.fail_memory_id = fail_memory_id
+
+    async def dispatch_extract_memory(self, memory_id: str) -> None:
+        if memory_id == self.fail_memory_id:
+            raise RuntimeError("dispatch failed")
+        await super().dispatch_extract_memory(memory_id)
 
 
 class FakeGraphRepository:

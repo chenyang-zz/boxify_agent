@@ -77,3 +77,24 @@ class MemoryDetailResult(LongTermMemory):
 
     graph_available: bool = True
     trace: MemoryTraceResult | None = None
+
+
+class MemoryReextractItemResult(BaseModel):
+    """单条重萃取候选记忆的派发结果。"""
+
+    memory_id: str
+    status: MemoryStatus
+    graph_dialogue_id: str | None = None
+    dispatched: bool = False
+    error: str | None = None
+
+
+class MemoryReextractResult(BaseModel):
+    """一次记忆重萃取请求的统计结果。"""
+
+    matched: int = 0
+    dispatched: int = 0
+    skipped: int = 0
+    dry_run: bool = False
+    items: list[MemoryReextractItemResult] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)

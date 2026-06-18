@@ -22,6 +22,8 @@ from app.interfaces.schemas.memory import (
     MemoryQualityOverviewResponse,
     MemoryReflectResponse,
     MemoryRelationHistoryResponse,
+    MemoryReextractRequest,
+    MemoryReextractResponse,
     MemoryResponse,
     MemorySearchRequest,
     MemoryTimelineEventResponse,
@@ -352,6 +354,30 @@ async def list_memory_quality_issues(
     )
 
 
+@router.post(
+    "/reextract",
+    response_model=Response[MemoryReextractResponse],
+    summary="批量重新萃取记忆",
+    description="按当前用户 PG 记忆选择集重新派发长期记忆图谱萃取任务。",
+)
+async def reextract_memories(
+    body: MemoryReextractRequest,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """批量重新派发当前用户记忆图谱萃取任务。"""
+    result = await memory_service.reextract_memories(
+        memory_ids=body.memory_ids,
+        statuses=body.statuses,
+        only_missing_graph=body.only_missing_graph,
+        dry_run=body.dry_run,
+        limit=body.limit,
+    )
+    return Response.success(
+        msg="记忆重萃取已处理",
+        data=MemoryReextractResponse.model_validate(result.model_dump()),
+    )
+
+
 @router.get(
     "/timeline",
     response_model=Response[list[MemoryTimelineEventResponse]],
@@ -369,6 +395,24 @@ async def list_memory_timeline(
             MemoryTimelineEventResponse.model_validate(event.model_dump())
             for event in events
         ]
+    )
+
+
+@router.post(
+    "/{memory_id}/reextract",
+    response_model=Response[MemoryReextractResponse],
+    summary="重新萃取单条记忆",
+    description="重新派发当前用户指定长期记忆的图谱萃取任务。",
+)
+async def reextract_memory(
+    memory_id: str,
+    memory_service: MemoryService = Depends(get_memory_service),
+):
+    """重新派发当前用户单条记忆图谱萃取任务。"""
+    result = await memory_service.reextract_memory(memory_id)
+    return Response.success(
+        msg="记忆重萃取已派发",
+        data=MemoryReextractResponse.model_validate(result.model_dump()),
     )
 
 

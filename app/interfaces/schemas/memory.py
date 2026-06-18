@@ -23,6 +23,37 @@ class MemorySearchRequest(BaseModel):
     top_k: int = Field(default=5, ge=1, le=20)
 
 
+class MemoryReextractRequest(BaseModel):
+    """批量重萃取记忆请求。"""
+
+    memory_ids: list[str] | None = None
+    statuses: list[MemoryStatus] = Field(default_factory=lambda: [MemoryStatus.FAILED])
+    only_missing_graph: bool = False
+    dry_run: bool = False
+    limit: int = Field(default=100, ge=1, le=500)
+
+
+class MemoryReextractItemResponse(BaseModel):
+    """单条记忆重萃取派发结果。"""
+
+    memory_id: str
+    status: MemoryStatus
+    graph_dialogue_id: str | None = None
+    dispatched: bool = False
+    error: str | None = None
+
+
+class MemoryReextractResponse(BaseModel):
+    """记忆重萃取统计响应。"""
+
+    matched: int = 0
+    dispatched: int = 0
+    skipped: int = 0
+    dry_run: bool = False
+    items: list[MemoryReextractItemResponse] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
 class MemoryConsolidateResponse(BaseModel):
     """手动记忆巩固统计响应。"""
 

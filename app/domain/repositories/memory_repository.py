@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.domain.models.long_term_memory import LongTermMemory
+from app.domain.models.long_term_memory import LongTermMemory, MemoryStatus
 from app.domain.models.memory_graph import MemoryQualityFailedMemoryResult
 
 
@@ -51,4 +51,16 @@ class MemoryRepository(ABC):
         self, user_id: str, limit: int
     ) -> list[MemoryQualityFailedMemoryResult]:
         """读取当前用户最近失败的记忆摘要。"""
+        ...
+
+    @abstractmethod
+    async def list_reextract_candidates(
+        self,
+        user_id: str,
+        memory_ids: list[str] | None,
+        statuses: list[MemoryStatus] | None,
+        only_missing_graph: bool,
+        limit: int,
+    ) -> list[LongTermMemory]:
+        """按用户边界选择需要重新派发图谱萃取的 PG 记忆。"""
         ...

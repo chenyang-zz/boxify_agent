@@ -134,10 +134,21 @@ class Settings(BaseSettings):
     memory_active_recall_entity_top_k: int = 3
     # 主动召回时最多返回的反思洞察数量
     memory_active_recall_insight_top_k: int = 3
+    # 主动召回时最多返回的主题社区数量
+    memory_active_recall_community_top_k: int = 2
+    # 主动召回时最多返回的经历事件数量
+    memory_active_recall_event_top_k: int = 2
+    # 是否在主动召回背景中包含主题社区摘要
+    memory_active_recall_include_communities: bool = True
+    # 是否在主动召回背景中包含经历事件事实
+    memory_active_recall_include_events: bool = True
     # 主动召回结果进入上下文的最低相关性分数
     memory_active_recall_min_score: float = 0.72
     # 注入 Agent 上下文的主动召回文本最大字符数
     memory_active_recall_max_chars: int = 1200
+
+    # 记忆重萃取批量接口默认处理上限
+    memory_reextract_batch_limit: int = 100
 
     # 记忆社区聚类的 LPA 迭代、权重、合并阈值和元数据采样限制
     # LPA 最多迭代轮数

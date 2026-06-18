@@ -378,6 +378,12 @@ class CommunityResult(BaseModel):
     member_count: int = 0
 
 
+class MemoryActiveRecallCommunityResult(CommunityResult):
+    """主动召回命中的主题社区。"""
+
+    score: float = 0
+
+
 class CommunityMemberResult(BaseModel):
     """社区成员实体返回项。"""
 
@@ -423,6 +429,12 @@ class MemoryTimelineEventResult(BaseModel):
     event_time: datetime | None = None
     created_at: datetime | None = None
     participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
+
+
+class MemoryActiveRecallEventResult(MemoryTimelineEventResult):
+    """主动召回命中的经历事件。"""
+
+    score: float = 0
 
 
 class MemoryTraceDialogueResult(BaseModel):

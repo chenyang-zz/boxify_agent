@@ -34,6 +34,8 @@ from app.domain.models.memory_graph import (
     MemoryRelationHistoryResult,
     MemoryTimelineEventResult,
     MemoryTimelineParticipantResult,
+    MemoryActiveRecallCommunityResult,
+    MemoryActiveRecallEventResult,
     RelationEdge,
     StatementNode,
 )
@@ -684,6 +686,107 @@ async def test_neo4j_repository_returns_event_timeline_by_user():
     assert "MATCH (event:Event {user_id: $user_id})" in query
     assert "ORDER BY event_has_time DESC" in query
     assert params == {"user_id": "user-a", "limit": 50}
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_searches_communities_by_member_embeddings():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "RETURN community.id AS id": [
+                {
+                    "id": "community-music",
+                    "name": "音乐偏好",
+                    "summary": "用户的音乐相关实体",
+                    "member_count": 2,
+                }
+            ],
+            "RETURN entity.id AS id": [
+                {
+                    "id": "entity-1",
+                    "name": "周杰伦",
+                    "type": "生命体",
+                    "description": "歌手",
+                    "embedding": [1.0, 0.0],
+                    "community_id": "community-music",
+                }
+            ],
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=2,
+    )
+
+    results = await repository.search_communities_by_vector(
+        "user-a", [1.0, 0.0], top_k=2
+    )
+
+    assert results == [
+        MemoryActiveRecallCommunityResult(
+            id="community-music",
+            name="音乐偏好",
+            summary="用户的音乐相关实体",
+            member_count=2,
+            score=1.0,
+        )
+    ]
+    assert all(params.get("user_id") == "user-a" for _, params in driver.executed)
+
+
+@pytest.mark.anyio
+async def test_neo4j_repository_searches_events_by_text_or_participant_vectors():
+    driver = FakeNeo4jDriver(
+        result_rows_by_keyword={
+            "MATCH (event:Event {user_id: $user_id})": [
+                {
+                    "id": "event-1",
+                    "title": "参加周杰伦演唱会",
+                    "description": "用户参加了周杰伦演唱会",
+                    "event_time": "2026-06-15T20:00:00",
+                    "created_at": "2026-06-16T09:00:00",
+                    "participants": [
+                        {
+                            "entity_id": "entity-1",
+                            "name": "周杰伦",
+                            "type": "生命体",
+                            "embedding": [1.0, 0.0],
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    repository = Neo4jMemoryGraphRepository(
+        driver=driver,
+        database="neo4j",
+        embedding_dims=2,
+    )
+
+    results = await repository.search_events_by_vector_or_text(
+        "user-a", "周杰伦演唱会", [1.0, 0.0], top_k=2
+    )
+
+    assert results == [
+        MemoryActiveRecallEventResult(
+            id="event-1",
+            title="参加周杰伦演唱会",
+            description="用户参加了周杰伦演唱会",
+            event_time="2026-06-15T20:00:00",
+            created_at="2026-06-16T09:00:00",
+            participants=[
+                MemoryTimelineParticipantResult(
+                    entity_id="entity-1",
+                    name="周杰伦",
+                    type="生命体",
+                )
+            ],
+            score=1.0,
+        )
+    ]
+    query, params = driver.executed[-1]
+    assert "MATCH (event:Event {user_id: $user_id})" in query
+    assert params["user_id"] == "user-a"
 
 
 @pytest.mark.anyio
