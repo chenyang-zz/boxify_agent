@@ -1,0 +1,35 @@
+app/tasks/memory/scheduled.py
+  s_b85c67e2355151::t_846fcd14628cff 1-121
+app/domain/repositories/user_repository.py
+  s_b85c67e2355151::t_591238fc6ae442 21-24
+tests/test_user_app_config.py
+  s_b85c67e2355151::t_e2299044db828c 128-132,180-222
+app/domain/models/app_config.py
+  s_b85c67e2355151::t_3bbea57e1d69bd 40
+app/celery_app.py
+  s_b85c67e2355151::t_ef1bb29bd17c1d 2,8-35,47,50
+tests/test_memory_scheduled_tasks.py
+  s_b85c67e2355151::t_edbe42c258896a 1-140
+app/infrastructure/repositories/db_user_repository.py
+  s_b85c67e2355151::t_a3732c5d3b7abc 34-38
+core/config.py
+  s_b85c67e2355151::t_09b8a0e9dd61ed 126-139
+app/interfaces/service_dependencies.py
+  s_b85c67e2355151::t_9c5bfd2ac36c5a 277-279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "4205dab8dec9a3d34d1e1211dbff23390d408b8c",
+  "prompts": {},
+  "sessions": {
+    "s_b85c67e2355151": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec0c4-9dd1-7b42-b028-e30d00a7b87d",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
