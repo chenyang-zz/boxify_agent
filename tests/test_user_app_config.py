@@ -125,6 +125,11 @@ async def test_app_config_service_load_and_save_share_one_uow():
     assert write_uows[0].app_config.saves == ["user-a"]
 
 
+def test_agent_config_defaults_active_recall_enabled():
+    assert AgentConfig().enable_active_recall is True
+    assert AgentConfig.model_validate({}).enable_active_recall is True
+
+
 @pytest.mark.anyio
 async def test_get_agent_service_uses_current_users_database_config(monkeypatch):
     app_config_repository = InMemoryAppConfigRepository()
@@ -170,6 +175,51 @@ async def test_get_agent_service_uses_current_users_database_config(monkeypatch)
     assert agent_service._agent_config.max_iterations == 42
     assert captured_llm_configs[0].base_url == "https://user-a.example.com"
     assert captured_llm_configs[0].model_name == "user-a-model"
+
+
+@pytest.mark.anyio
+async def test_get_agent_service_skips_active_recall_when_disabled(monkeypatch):
+    app_config_repository = InMemoryAppConfigRepository()
+    await app_config_repository.save(
+        "user-a",
+        AppConfig(
+            llm_config=LLMConfig(),
+            agent_config=AgentConfig(enable_active_recall=False),
+            mcp_config=MCPConfig(),
+            a2a_config=A2AConfig(),
+        ),
+    )
+
+    async def fake_memory_graph(user_id):
+        assert user_id == "user-a"
+        return object(), object()
+
+    class FakeActiveRecall:
+        def __init__(self, **kwargs):
+            raise AssertionError("active recall should not be built")
+
+    monkeypatch.setattr(service_dependencies, "OpenAILLM", lambda config: object())
+    monkeypatch.setattr(service_dependencies, "CosFileStorage", lambda **kwargs: object())
+    monkeypatch.setattr(service_dependencies, "_build_optional_memory_graph", fake_memory_graph)
+    monkeypatch.setattr(service_dependencies, "MemoryActiveRecall", FakeActiveRecall)
+    monkeypatch.setattr(
+        service_dependencies,
+        "get_uow",
+        lambda: TrackingUnitOfWork(app_config_repository=app_config_repository),
+    )
+
+    agent_service = await service_dependencies.get_agent_service(
+        cos=object(),
+        current_user=User(
+            id="user-a",
+            username="alice",
+            password_hash="hash",
+            is_active=True,
+            is_admin=False,
+        ),
+    )
+
+    assert agent_service._active_recall is None
 
 
 def test_app_config_routes_isolate_config_by_logged_in_user(monkeypatch):

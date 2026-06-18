@@ -274,7 +274,9 @@ async def get_agent_service(
             graph_repository=memory_graph[0],
             embedding=memory_graph[1],
         )
-        if memory_graph[0] and memory_graph[1]
+        if app_config.agent_config.enable_active_recall
+        and memory_graph[0]
+        and memory_graph[1]
         else None
     )
     return AgentService(

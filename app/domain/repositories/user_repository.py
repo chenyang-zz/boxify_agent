@@ -18,6 +18,10 @@ class UserRepository(Protocol):
         """获取用户总数"""
         ...
 
+    async def list_active_ids(self) -> list[str]:
+        """获取所有启用用户ID"""
+        ...
+
     async def save(self, user: User) -> None:
         """保存用户"""
         ...

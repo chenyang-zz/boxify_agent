@@ -31,6 +31,11 @@ class DBUserRepository(UserRepository):
         result = await self.db_session.execute(stmt)
         return int(result.scalar_one())
 
+    async def list_active_ids(self) -> list[str]:
+        stmt = select(UserModel.id).where(UserModel.is_active.is_(True))
+        result = await self.db_session.execute(stmt)
+        return list(result.scalars().all())
+
     async def save(self, user: User) -> None:
         stmt = select(UserModel).where(UserModel.id == user.id)
         result = await self.db_session.execute(stmt)

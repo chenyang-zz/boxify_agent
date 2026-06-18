@@ -123,6 +123,20 @@ class Settings(BaseSettings):
     # 生成社区名称/摘要时最多采样的成员数量
     memory_community_metadata_member_limit: int = 20
 
+    # 记忆自动维护调度配置，默认关闭以避免开发环境产生后台 LLM/Neo4j 成本
+    # 是否启用 Celery beat 记忆维护任务
+    memory_maintenance_enabled: bool = False
+    # 是否定时派发记忆巩固任务
+    memory_scheduled_consolidate_enabled: bool = False
+    # 是否定时派发社区全量聚类任务
+    memory_scheduled_cluster_enabled: bool = False
+    # 是否定时派发记忆反思任务
+    memory_scheduled_reflect_enabled: bool = False
+    # 记忆维护任务每日运行小时
+    memory_maintenance_hour: int = 4
+    # 记忆维护任务每日运行分钟
+    memory_maintenance_minute: int = 0
+
     # Elasticsearch配置
     # Elasticsearch HTTP 地址，用于 Notebook 知识库混合检索
     elasticsearch_url: str = "http://localhost:9200"
