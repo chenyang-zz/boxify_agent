@@ -1,0 +1,53 @@
+app/application/services/memory_service.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 11-13,23-27,29-38,135,148,154,170,188,192,219,228,235,247,252,292,300,312,319,326,332,343,352,356,361,381,389,402,409,424,429-430,432,443,466,468
+app/domain/services/memory/manager.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 14,125,142
+  s_44b7f7a2f18bd5::t_1681d95a3ed531 137
+app/infrastructure/repositories/neo4j_memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 5-7,12-15,17-22,24-38,195,426,456,468,477,489,515,532,539,589,619,876,903,951,977,1000,1024,1083,1091,1136,1219,1268,1272,1344,1348,1355,1363,1478,1488,1520,1715,2028,2036,2079,2081,2089,2091,2104,2106,2119,2121,2136,2138,2149,2151,2164,2180,2182,2196,2198,2240,2242,2255,2257,2264,2275,2278-2279,2286,2295,2314,2327,2336,2353,2360
+tests/test_memory_active_recall.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 5-9,96,110,134,150,155,160,174
+app/domain/repositories/memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 4-6,10-13,15-19,21-26,49,116,122,128,132,182,188,198,206,210,216,222,228,242,248,254,260,266,272
+app/domain/services/memory/active_recall.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 7-9,130,142,149,154
+tests/test_memory_service.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 7-9,13,15-24,26-33,90,174,408,432,439,460,475,505,509,512,525,539,592,655-656,974,982,1155,1166,1181,1201,1208,1222,1237,1245,1252,1283,1296,1314,1334,1344,1358,1366,1370,1390-1391
+tests/test_memory_api.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 8-11,14-28,30-34,37-38,812,823,826-827,840,846,867,873,907,918,927,943,950,963,978,986,995,1004,1013,1017,1020,1033,1049,1060,1075,1092,1102,1110,1121,1132,1136
+tests/test_memory_graph_repository.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 5-7,12,14,16-20,22-38,474,594,602,615,665,672,677,726,771,778,814,829,871,874,887,902,972,985,1055,1067,1114,1219,1230,1240,1244,1366-1367,1374,1381,1396,1402,1410,1417,1432,1439
+app/domain/repositories/memory_repository.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 4,52
+app/domain/services/memory/community_summarizer.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 6-7,35-36,58,71
+app/interfaces/schemas/memory.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 7,475
+app/infrastructure/repositories/db_memory_repository.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 5,104,117
+app/domain/models/long_term_memory.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 10,75,79,82,92,99
+app/domain/models/memory_graph.py
+  s_44b7f7a2f18bd5::t_1681d95a3ed531 687
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 237,244,258,271,280,292,297,300,306,308-309,311-312,335,358,372,381,387,401,415,423,431,434,440,449,457,473,485,493,509,517,520,523-529,532,548,560,563-565,568,572-573,576,589,604,618,621,625,628,633,649
+app/domain/services/memory/entity_deduplicator.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 9,42,99,324,339
+app/domain/services/memory/community_clusterer.py
+  s_44b7f7a2f18bd5::t_c1a6afc072743d 4-5,223-224,263,269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "08dd728b04c83f3a059258a4cef2fb5ba3bb2364",
+  "prompts": {},
+  "sessions": {
+    "s_44b7f7a2f18bd5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eb74d-4773-7822-b34b-0618e0a63e90",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
