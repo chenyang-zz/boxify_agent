@@ -1,0 +1,91 @@
+app/interfaces/schemas/session.py
+  s_e16b8b24fb0f54::t_ac9120a56e6ee0 15,23-24,28-32,42,45-46,56-60,62-68,70-77,79-98
+  s_e16b8b24fb0f54::t_dcbf68fa632e3b 44
+  s_e16b8b24fb0f54::t_e23865f958a3b6 25,33,47,61,69,78,99
+app/domain/repositories/session_project_repository.py
+  s_e16b8b24fb0f54::t_ca617688b2a21d 1-29
+app/application/models/session_sidebar.py
+  s_e16b8b24fb0f54::t_43acb019d62b11 1-20
+app/domain/repositories/session_repository.py
+  s_e16b8b24fb0f54::t_0b68c5e6de8f27 21-24,29-34,39-44
+app/interfaces/service_dependencies.py
+  s_e16b8b24fb0f54::t_64421ad179bd6b 15,323-336
+  s_e16b8b24fb0f54::t_942f5cde608613 322
+  s_e16b8b24fb0f54::t_f034480e71f68e 259-266
+app/domain/repositories/vow.py
+  s_e16b8b24fb0f54::t_0b68c5e6de8f27 16,30
+alembic/versions/8b2f4d6a9c31_add_pinned_flags_to_sessions.py
+  s_e16b8b24fb0f54::t_e23865f958a3b6 1-43
+app/infrastructure/repositories/db_session_repository.py
+  s_e16b8b24fb0f54::t_7a1727297c12b0 55-68,79-90,99-112
+app/infrastructure/models/session.py
+  s_e16b8b24fb0f54::t_0e45d679abf6c2 4,6-13,25-36,41-46,52,104,123
+  s_e16b8b24fb0f54::t_e23865f958a3b6 5,47-51
+app/interfaces/endpoints/session_routes.py
+  s_e16b8b24fb0f54::t_60162aeba93e4b 184-185,205-206,220-221
+  s_e16b8b24fb0f54::t_e23865f958a3b6 85,103,111,179,200,238-239
+  s_e16b8b24fb0f54::t_854cb88573f1ea 64-76,121,140,225,368
+  s_e16b8b24fb0f54::t_1d5fb83cb5cb11 19,21,23,45-48
+  s_e16b8b24fb0f54::t_dcbf68fa632e3b 61-63,367,369
+  s_e16b8b24fb0f54::t_152e3ca6d335af 282-283,287-294,298-303,306-309
+  s_e16b8b24fb0f54::t_91f0e476629d65 362
+  s_e16b8b24fb0f54::t_7af75a7e342094 15,28-31,39,42-43,59-60,77-84,86-88,96,100-102,104,109-110,128,135-139,141-178,180-183,186-199,202-204,207-219,222-224,226-237,240-241
+app/domain/models/session.py
+  s_e16b8b24fb0f54::t_e23865f958a3b6 37
+  s_e16b8b24fb0f54::t_ca617688b2a21d 23-29,34-36
+app/infrastructure/models/__init__.py
+  s_e16b8b24fb0f54::t_0e45d679abf6c2 9,21
+app/application/models/__init__.py
+  s_e16b8b24fb0f54::t_c1800cd8ba4820 1
+app/domain/models/session_project.py
+  s_e16b8b24fb0f54::t_ca617688b2a21d 1-13,15-16
+  s_e16b8b24fb0f54::t_e23865f958a3b6 14
+app/application/services/chat_service.py
+  s_e16b8b24fb0f54::t_64421ad179bd6b 1-90
+tests/test_uow_transactions.py
+  s_e16b8b24fb0f54::t_f52aff23d9befd 345-350
+  s_e16b8b24fb0f54::t_cd9fa0f9768ea8 9,428-437
+  s_e16b8b24fb0f54::t_3552836e972120 11,126-131,162-167,193-223
+  s_e16b8b24fb0f54::t_db1076956c37f9 7,26,224-253
+app/application/services/session_service.py
+  s_e16b8b24fb0f54::t_e23865f958a3b6 47,60,74,84,95,111-112,167,178-179
+  s_e16b8b24fb0f54::t_0deb79cf92b665 16,19-20,26,36,41,43-46,48,51,53-59,61,69-70,73,75-83,85-94,96-110,113-126,128-131,142-150,152,157-166,168-177,180-182,187,195,201,207-208,216,227,254,280,293-323
+  s_e16b8b24fb0f54::t_a574955ecfd72a 132-141
+  s_e16b8b24fb0f54::t_43acb019d62b11 12-15,127,151,153-156
+tests/test_session_api.py
+  s_e16b8b24fb0f54::t_3fcbead271e4f5 1-2,4-5,10,12,14-34,37-39,56-73,75-82,84-92,94-104,106,108-113,164-170,173-174,176-178,180-181,226-228,275-277,280-281,293,302,313-317,324-329,331-342,353-355,406-413,415-424,426-436
+  s_e16b8b24fb0f54::t_54356ecbd6d760 171-172,175,192-193,215-216
+  s_e16b8b24fb0f54::t_4fe81bd745a7a1 3,6-8,114-163,378-405
+  s_e16b8b24fb0f54::t_98686749e1f87f 105,199
+  s_e16b8b24fb0f54::t_865be29ced0cbc 259-262
+  s_e16b8b24fb0f54::t_ff675b4928be49 9,11,13,229-258,263-274,356-377
+  s_e16b8b24fb0f54::t_917b7dbff67fe3 318-321,323
+  s_e16b8b24fb0f54::t_99d983d2bf0a29 35-36,40-55,74,83,93,107,179,182-191,194-198,200-214,217-225,278-279,282-292,294-301,303-312,322,330,343-352,414,425
+app/infrastructure/repositories/db_session_project_repository.py
+  s_e16b8b24fb0f54::t_7a1727297c12b0 1-52
+alembic/versions/3a7e5c9d2b10_add_session_projects_and_session_ownership.py
+  s_e16b8b24fb0f54::t_e2d2ad43ed145a 1-122
+app/infrastructure/repositories/db_uow.py
+  s_e16b8b24fb0f54::t_7a1727297c12b0 23-25,117
+app/application/services/agent_service.py
+  s_e16b8b24fb0f54::t_942f5cde608613 33,57,72,176-181
+app/infrastructure/models/session_project.py
+  s_e16b8b24fb0f54::t_0e45d679abf6c2 1-4,6-42,48-74
+  s_e16b8b24fb0f54::t_e23865f958a3b6 5,43-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "23cc0d8fbdc809116317e0bcfb7edd107a22fe8f",
+  "prompts": {},
+  "sessions": {
+    "s_e16b8b24fb0f54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ed9cd-8a68-79a3-8b1c-3755f689c395",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
