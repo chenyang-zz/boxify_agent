@@ -1,29 +1,29 @@
 from typing import Protocol
 
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
-    CommunityResult,
+    CommunityMember,
+    CommunityRelationFact,
+    CommunitySummary,
     CommunityVoteEntity,
     CommunityVoteNeighbor,
     EntityNode,
-    InsightResult,
-    MemoryActiveRecallCommunityResult,
-    MemoryActiveRecallEventResult,
-    MemoryEntitySubgraphResult,
+    InsightView,
+    MemoryActiveRecallCommunityHit,
+    MemoryActiveRecallEventHit,
+    MemoryEntitySubgraphView,
     MemoryGraph,
-    MemoryGraphEdgeResult,
-    MemoryGraphNodeResult,
-    MemoryGraphResult,
-    MemoryMergeDuplicatesResult,
-    MemoryProfileEntityResult,
+    MemoryGraphEdgeView,
+    MemoryGraphNodeView,
+    MemoryGraphSearchHit,
+    MemoryDuplicateMergeStats,
+    MemoryProfileEntity,
     MemoryPromotionStats,
-    MemoryQualityGraphCountsResult,
-    MemoryQualityIssueListResult,
-    MemoryQualityIssueSummaryResult,
-    MemoryRelationHistoryResult,
-    MemoryTimelineEventResult,
-    MemoryTraceResult,
+    MemoryGraphCounts,
+    MemoryQualityIssueList,
+    MemoryQualityIssueSummary,
+    MemoryRelationHistoryItem,
+    MemoryTimelineEvent,
+    MemoryTrace,
 )
 
 
@@ -46,7 +46,7 @@ class MemoryGraphRepository(Protocol):
         query: str,
         top_k: int,
         query_embedding: list[float] | None = None,
-    ) -> list[MemoryGraphResult]:
+    ) -> list[MemoryGraphSearchHit]:
         """检索用户记忆图谱。"""
         ...
 
@@ -113,23 +113,23 @@ class MemoryGraphRepository(Protocol):
 
     async def search_insights_by_vector(
         self, user_id: str, query_embedding: list[float], top_k: int
-    ) -> list[InsightResult]:
+    ) -> list[InsightView]:
         """按向量检索当前用户洞察。"""
         ...
 
     async def search_communities_by_vector(
         self, user_id: str, query_embedding: list[float], top_k: int
-    ) -> list[MemoryActiveRecallCommunityResult]:
+    ) -> list[MemoryActiveRecallCommunityHit]:
         """按社区成员平均向量检索当前用户主题社区。"""
         ...
 
     async def search_events_by_vector_or_text(
         self, user_id: str, query: str, query_embedding: list[float], top_k: int
-    ) -> list[MemoryActiveRecallEventResult]:
+    ) -> list[MemoryActiveRecallEventHit]:
         """按参与实体向量或标题描述文本检索当前用户经历事件。"""
         ...
 
-    async def list_insights(self, user_id: str) -> list[InsightResult]:
+    async def list_insights(self, user_id: str) -> list[InsightView]:
         """列出当前用户洞察。"""
         ...
 
@@ -179,13 +179,13 @@ class MemoryGraphRepository(Protocol):
 
     async def community_members(
         self, user_id: str, community_id: str
-    ) -> list[CommunityMemberResult]:
+    ) -> list[CommunityMember]:
         """读取社区成员实体。"""
         ...
 
     async def community_relationships(
         self, user_id: str, community_id: str
-    ) -> list[CommunityRelationResult]:
+    ) -> list[CommunityRelationFact]:
         """读取社区内部关系事实。"""
         ...
 
@@ -195,7 +195,7 @@ class MemoryGraphRepository(Protocol):
         """更新社区名称和摘要。"""
         ...
 
-    async def list_communities(self, user_id: str) -> list[CommunityResult]:
+    async def list_communities(self, user_id: str) -> list[CommunitySummary]:
         """列出当前用户社区。"""
         ...
 
@@ -203,29 +203,29 @@ class MemoryGraphRepository(Protocol):
         """清理当前用户空社区。"""
         ...
 
-    async def graph_nodes(self, user_id: str) -> list[MemoryGraphNodeResult]:
+    async def graph_nodes(self, user_id: str) -> list[MemoryGraphNodeView]:
         """读取当前用户完整实体关系图节点。"""
         ...
 
-    async def graph_edges(self, user_id: str) -> list[MemoryGraphEdgeResult]:
+    async def graph_edges(self, user_id: str) -> list[MemoryGraphEdgeView]:
         """读取当前用户完整实体关系图边。"""
         ...
 
     async def entity_subgraph(
         self, user_id: str, entity_id: str
-    ) -> MemoryEntitySubgraphResult:
+    ) -> MemoryEntitySubgraphView:
         """读取当前用户单实体一跳子图。"""
         ...
 
     async def profile_entities(
         self, user_id: str
-    ) -> list[MemoryProfileEntityResult]:
+    ) -> list[MemoryProfileEntity]:
         """读取当前用户画像实体及一跳出边事实。"""
         ...
 
     async def entity_relation_history(
         self, user_id: str, entity_id: str, predicate: str | None = None
-    ) -> list[MemoryRelationHistoryResult] | None:
+    ) -> list[MemoryRelationHistoryItem] | None:
         """读取当前用户单实体一跳关系历史；实体不存在时返回 None。"""
         ...
 
@@ -239,36 +239,36 @@ class MemoryGraphRepository(Protocol):
 
     async def quality_graph_counts(
         self, user_id: str
-    ) -> MemoryQualityGraphCountsResult:
+    ) -> MemoryGraphCounts:
         """统计当前用户图谱节点和关系数量。"""
         ...
 
     async def quality_issue_summary(
         self, user_id: str
-    ) -> MemoryQualityIssueSummaryResult:
+    ) -> MemoryQualityIssueSummary:
         """统计当前用户图谱质量问题摘要。"""
         ...
 
     async def quality_issues(
         self, user_id: str, category: str, limit: int
-    ) -> MemoryQualityIssueListResult:
+    ) -> MemoryQualityIssueList:
         """读取当前用户指定质量问题类别样本。"""
         ...
 
     async def merge_duplicate_entities(
         self, user_id: str
-    ) -> MemoryMergeDuplicatesResult:
+    ) -> MemoryDuplicateMergeStats:
         """合并当前用户历史同名同类型重复实体。"""
         ...
 
     async def event_timeline(
         self, user_id: str, limit: int
-    ) -> list[MemoryTimelineEventResult]:
+    ) -> list[MemoryTimelineEvent]:
         """返回当前用户事件时间线。"""
         ...
 
     async def memory_trace(
         self, user_id: str, memory_id: str
-    ) -> MemoryTraceResult | None:
+    ) -> MemoryTrace | None:
         """读取当前用户单条 PG 记忆对应的图谱溯源。"""
         ...

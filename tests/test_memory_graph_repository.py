@@ -2,40 +2,40 @@ import pytest
 
 from app.domain.models.memory_graph import (
     ChunkNode,
-    CommunityMemberResult,
-    CommunityRelationResult,
-    CommunityResult,
+    CommunityMember,
+    CommunityRelationFact,
+    CommunitySummary,
     CommunityVoteNeighbor,
     DialogueNode,
     EntityNode,
     EventNode,
-    InsightResult,
+    InsightView,
     InvolvesEdge,
-    MemoryEntitySubgraphResult,
+    MemoryEntitySubgraphView,
     MemoryGraph,
-    MemoryGraphEdgeResult,
-    MemoryGraphNodeResult,
-    MemoryMergeDuplicatesResult,
-    MemoryProfileEntityResult,
-    MemoryProfileRelationResult,
+    MemoryGraphEdgeView,
+    MemoryGraphNodeView,
+    MemoryDuplicateMergeStats,
+    MemoryProfileEntity,
+    MemoryProfileRelation,
     MemoryPromotionStats,
-    MemoryQualityGraphCountsResult,
-    MemoryQualityIssueListResult,
-    MemoryQualityIssueResult,
-    MemoryQualityIssueSummaryResult,
-    MemoryTraceChunkResult,
-    MemoryTraceDialogueResult,
-    MemoryTraceEntityResult,
-    MemoryTraceEventResult,
-    MemoryTraceMentionResult,
-    MemoryTraceRelationResult,
-    MemoryTraceResult,
-    MemoryTraceStatementResult,
-    MemoryRelationHistoryResult,
-    MemoryTimelineEventResult,
-    MemoryTimelineParticipantResult,
-    MemoryActiveRecallCommunityResult,
-    MemoryActiveRecallEventResult,
+    MemoryGraphCounts,
+    MemoryQualityIssueList,
+    MemoryQualityIssue,
+    MemoryQualityIssueSummary,
+    MemoryTraceChunk,
+    MemoryTraceDialogue,
+    MemoryTraceEntity,
+    MemoryTraceEvent,
+    MemoryTraceMention,
+    MemoryTraceRelation,
+    MemoryTrace,
+    MemoryTraceStatement,
+    MemoryRelationHistoryItem,
+    MemoryTimelineEvent,
+    MemoryTimelineParticipant,
+    MemoryActiveRecallCommunityHit,
+    MemoryActiveRecallEventHit,
     RelationEdge,
     StatementNode,
 )
@@ -471,7 +471,7 @@ async def test_neo4j_repository_manages_insight_schema_upsert_and_vector_search(
         "top_k": 3,
     }
     assert insights == [
-        InsightResult(
+        InsightView(
             id="insight-1",
             theme="音乐偏好",
             content="用户偏好华语流行音乐。",
@@ -591,7 +591,7 @@ async def test_neo4j_repository_manages_community_schema_assignment_and_queries(
         ]
     }
     assert communities == [
-        CommunityResult(
+        CommunitySummary(
             id="community-music",
             name="音乐偏好",
             summary="用户的音乐相关实体",
@@ -599,7 +599,7 @@ async def test_neo4j_repository_manages_community_schema_assignment_and_queries(
         )
     ]
     assert members == [
-        CommunityMemberResult(
+        CommunityMember(
             entity_id="entity-1",
             entity_name="周杰伦",
             entity_type="生命体",
@@ -612,7 +612,7 @@ async def test_neo4j_repository_manages_community_schema_assignment_and_queries(
         )
     ]
     assert relationships == [
-        CommunityRelationResult(
+        CommunityRelationFact(
             source_entity_id="entity-user",
             source_name="用户",
             target_entity_id="entity-1",
@@ -662,19 +662,19 @@ async def test_neo4j_repository_returns_event_timeline_by_user():
     events = await repository.event_timeline("user-a", limit=50)
 
     assert events == [
-        MemoryTimelineEventResult(
+        MemoryTimelineEvent(
             id="event-1",
             title="参加周杰伦演唱会",
             description="用户参加了周杰伦演唱会",
             event_time="2026-06-15T20:00:00",
             created_at="2026-06-16T09:00:00",
             participants=[
-                MemoryTimelineParticipantResult(
+                MemoryTimelineParticipant(
                     entity_id="entity-user",
                     name="用户",
                     type="生命体",
                 ),
-                MemoryTimelineParticipantResult(
+                MemoryTimelineParticipant(
                     entity_id="entity-1",
                     name="周杰伦",
                     type="生命体",
@@ -723,7 +723,7 @@ async def test_neo4j_repository_searches_communities_by_member_embeddings():
     )
 
     assert results == [
-        MemoryActiveRecallCommunityResult(
+        MemoryActiveRecallCommunityHit(
             id="community-music",
             name="音乐偏好",
             summary="用户的音乐相关实体",
@@ -768,14 +768,14 @@ async def test_neo4j_repository_searches_events_by_text_or_participant_vectors()
     )
 
     assert results == [
-        MemoryActiveRecallEventResult(
+        MemoryActiveRecallEventHit(
             id="event-1",
             title="参加周杰伦演唱会",
             description="用户参加了周杰伦演唱会",
             event_time="2026-06-15T20:00:00",
             created_at="2026-06-16T09:00:00",
             participants=[
-                MemoryTimelineParticipantResult(
+                MemoryTimelineParticipant(
                     entity_id="entity-1",
                     name="周杰伦",
                     type="生命体",
@@ -811,7 +811,7 @@ async def test_neo4j_repository_returns_graph_view_nodes_and_edges_by_user():
     edges = await repository.graph_edges("user-a")
 
     assert nodes == [
-        MemoryGraphNodeResult(
+        MemoryGraphNodeView(
             id="entity-1",
             name="周杰伦",
             type="生命体",
@@ -826,7 +826,7 @@ async def test_neo4j_repository_returns_graph_view_nodes_and_edges_by_user():
         )
     ]
     assert edges == [
-        MemoryGraphEdgeResult(
+        MemoryGraphEdgeView(
             source="entity-user",
             target="entity-1",
             predicate="偏好",
@@ -868,10 +868,10 @@ async def test_neo4j_repository_returns_entity_subgraph_by_user():
 
     subgraph = await repository.entity_subgraph("user-a", "entity-1")
 
-    assert subgraph == MemoryEntitySubgraphResult(
+    assert subgraph == MemoryEntitySubgraphView(
         center="entity-1",
         nodes=[
-            MemoryGraphNodeResult(
+            MemoryGraphNodeView(
                 id="entity-1",
                 name="周杰伦",
                 type="生命体",
@@ -884,7 +884,7 @@ async def test_neo4j_repository_returns_entity_subgraph_by_user():
                 core_facts=["用户长期喜欢周杰伦"],
                 traits=["偏好华语流行"],
             ),
-            MemoryGraphNodeResult(
+            MemoryGraphNodeView(
                 id="entity-user",
                 name="用户",
                 type="生命体",
@@ -899,7 +899,7 @@ async def test_neo4j_repository_returns_entity_subgraph_by_user():
             ),
         ],
         edges=[
-            MemoryGraphEdgeResult(
+            MemoryGraphEdgeView(
                 source="entity-user",
                 target="entity-1",
                 predicate="偏好",
@@ -969,7 +969,7 @@ async def test_neo4j_repository_returns_profile_and_deletes_entities_insights_by
     insight_deleted = await repository.delete_insight("user-a", "insight-1")
 
     assert profile_entities == [
-        MemoryProfileEntityResult(
+        MemoryProfileEntity(
             id="entity-1",
             name="周杰伦",
             type="生命体",
@@ -982,7 +982,7 @@ async def test_neo4j_repository_returns_profile_and_deletes_entities_insights_by
             core_facts=["用户长期喜欢周杰伦"],
             traits=["偏好华语流行"],
             relations=[
-                MemoryProfileRelationResult(
+                MemoryProfileRelation(
                     predicate="偏好",
                     target_entity_id="entity-1",
                     target_name="周杰伦",
@@ -1052,7 +1052,7 @@ async def test_neo4j_repository_returns_relation_history_by_user_and_predicate()
     )
 
     assert relations == [
-        MemoryRelationHistoryResult(
+        MemoryRelationHistoryItem(
             relation_id="rel-current",
             direction="outgoing",
             neighbor_entity_id="entity-company",
@@ -1064,7 +1064,7 @@ async def test_neo4j_repository_returns_relation_history_by_user_and_predicate()
             invalid_at=None,
             is_current=True,
         ),
-        MemoryRelationHistoryResult(
+        MemoryRelationHistoryItem(
             relation_id="rel-history",
             direction="outgoing",
             neighbor_entity_id="entity-old-company",
@@ -1111,7 +1111,7 @@ async def test_neo4j_repository_merges_duplicate_entities_in_single_transaction(
 
     stats = await repository.merge_duplicate_entities("user-a")
 
-    assert stats == MemoryMergeDuplicatesResult(
+    assert stats == MemoryDuplicateMergeStats(
         removed_entities=1,
         merged_groups=1,
     )
@@ -1216,7 +1216,7 @@ async def test_neo4j_repository_returns_quality_counts_summary_and_issue_samples
         "user-a", "expired_relations", limit=50
     )
 
-    assert counts == MemoryQualityGraphCountsResult(
+    assert counts == MemoryGraphCounts(
         dialogues=1,
         chunks=2,
         statements=3,
@@ -1227,7 +1227,7 @@ async def test_neo4j_repository_returns_quality_counts_summary_and_issue_samples
         communities=8,
         insights=9,
     )
-    assert summary == MemoryQualityIssueSummaryResult(
+    assert summary == MemoryQualityIssueSummary(
         duplicate_entities=2,
         missing_embeddings=1,
         orphan_entities=3,
@@ -1237,11 +1237,11 @@ async def test_neo4j_repository_returns_quality_counts_summary_and_issue_samples
         empty_communities=7,
         orphan_insights=8,
     )
-    assert duplicate_issues == MemoryQualityIssueListResult(
+    assert duplicate_issues == MemoryQualityIssueList(
         category="duplicate_entities",
         total=1,
         items=[
-            MemoryQualityIssueResult(
+            MemoryQualityIssue(
                 category="duplicate_entities",
                 severity="info",
                 title="重复实体",
@@ -1363,22 +1363,22 @@ async def test_neo4j_repository_returns_memory_trace_by_user_and_memory_id():
 
     trace = await repository.memory_trace("user-a", "mem-1")
 
-    assert trace == MemoryTraceResult(
-        dialogue=MemoryTraceDialogueResult(
+    assert trace == MemoryTrace(
+        dialogue=MemoryTraceDialogue(
             id="dialogue-1",
             memory_id="mem-1",
             summary="用户喜欢周杰伦。",
             created_at="2026-06-16T09:00:00",
         ),
         chunks=[
-            MemoryTraceChunkResult(
+            MemoryTraceChunk(
                 id="chunk-1",
                 index=0,
                 text="用户喜欢周杰伦。",
             )
         ],
         statements=[
-            MemoryTraceStatementResult(
+            MemoryTraceStatement(
                 id="statement-1",
                 chunk_id="chunk-1",
                 index=0,
@@ -1393,13 +1393,13 @@ async def test_neo4j_repository_returns_memory_trace_by_user_and_memory_id():
             )
         ],
         entities=[
-            MemoryTraceEntityResult(
+            MemoryTraceEntity(
                 id="entity-user",
                 name="用户",
                 type="生命体",
                 description="当前用户",
             ),
-            MemoryTraceEntityResult(
+            MemoryTraceEntity(
                 id="entity-jay",
                 name="周杰伦",
                 type="生命体",
@@ -1407,14 +1407,14 @@ async def test_neo4j_repository_returns_memory_trace_by_user_and_memory_id():
             ),
         ],
         mentions=[
-            MemoryTraceMentionResult(
+            MemoryTraceMention(
                 id="mention-1",
                 statement_id="statement-1",
                 entity_id="entity-jay",
             )
         ],
         relations=[
-            MemoryTraceRelationResult(
+            MemoryTraceRelation(
                 id="rel-1",
                 source_entity_id="entity-user",
                 source_name="用户",
@@ -1429,14 +1429,14 @@ async def test_neo4j_repository_returns_memory_trace_by_user_and_memory_id():
             )
         ],
         events=[
-            MemoryTraceEventResult(
+            MemoryTraceEvent(
                 id="event-1",
                 title="参加周杰伦演唱会",
                 description="用户参加了周杰伦演唱会",
                 event_time="2026-06-15T20:00:00",
                 created_at="2026-06-16T09:00:00",
                 participants=[
-                    MemoryTimelineParticipantResult(
+                    MemoryTimelineParticipant(
                         entity_id="entity-jay",
                         name="周杰伦",
                         type="生命体",

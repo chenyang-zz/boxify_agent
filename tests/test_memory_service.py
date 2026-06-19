@@ -4,33 +4,33 @@ from app.application.errors.exceptions import BadRequestError, NotFoundError
 from app.application.services.memory_service import MemoryService
 from app.domain.models.long_term_memory import LongTermMemory, MemorySource, MemoryStatus
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
-    CommunityResult,
+    CommunityMember,
+    CommunityRelationFact,
+    CommunitySummary,
     CommunityVoteEntity,
     EntityNode,
     GraphRelationFact,
-    InsightResult,
+    InsightView,
     MemoryConsolidationStats,
-    MemoryEntitySubgraphResult,
-    MemoryGraphEdgeResult,
-    MemoryGraphNodeResult,
-    MemoryGraphResult,
-    MemoryGraphViewResult,
-    MemoryMergeDuplicatesResult,
-    MemoryProfileEntityResult,
-    MemoryProfileGroupResult,
-    MemoryProfileRelationResult,
-    MemoryProfileResult,
+    MemoryEntitySubgraphView,
+    MemoryGraphEdgeView,
+    MemoryGraphNodeView,
+    MemoryGraphSearchHit,
+    MemoryGraphView,
+    MemoryDuplicateMergeStats,
+    MemoryProfileEntity,
+    MemoryProfileGroup,
+    MemoryProfileRelation,
+    MemoryProfile,
     MemoryPromotionStats,
-    MemoryQualityGraphCountsResult,
-    MemoryQualityIssueListResult,
-    MemoryQualityIssueResult,
-    MemoryQualityIssueSummaryResult,
-    MemoryTraceDialogueResult,
-    MemoryTraceResult,
-    MemoryTimelineEventResult,
-    MemoryTimelineParticipantResult,
+    MemoryGraphCounts,
+    MemoryQualityIssueList,
+    MemoryQualityIssue,
+    MemoryQualityIssueSummary,
+    MemoryTraceDialogue,
+    MemoryTrace,
+    MemoryTimelineEvent,
+    MemoryTimelineParticipant,
 )
 from app.domain.services.memory import LongTermMemoryManager, MemoryConsolidator
 from app.domain.services.memory.community_clusterer import MemoryCommunityClusterer
@@ -87,7 +87,7 @@ async def test_long_term_memory_manager_prefers_graph_results():
     repository = InMemoryMemoryRepository()
     graph_repository = FakeGraphRepository(
         [
-            MemoryGraphResult(
+            MemoryGraphSearchHit(
                 entity_id="entity-1",
                 entity_name="周杰伦",
                 entity_type="Person",
@@ -171,7 +171,7 @@ async def test_long_term_memory_manager_uses_graph_fulltext_when_embedding_fails
     repository = InMemoryMemoryRepository()
     graph_repository = FakeGraphRepository(
         [
-            MemoryGraphResult(
+            MemoryGraphSearchHit(
                 entity_id="entity-1",
                 entity_name="周杰伦",
                 entity_type="生命体",
@@ -405,7 +405,7 @@ async def test_application_memory_service_clusters_and_lists_communities():
 
     assert stats.assigned_entities == 1
     assert communities == [
-        CommunityResult(
+        CommunitySummary(
             id="community-music",
             name="音乐偏好",
             summary="用户的音乐相关实体",
@@ -429,14 +429,14 @@ async def test_application_memory_service_lists_timeline_events():
 
     assert repository.calls == [("user-a", 25)]
     assert events == [
-        MemoryTimelineEventResult(
+        MemoryTimelineEvent(
             id="event-1",
             title="参加周杰伦演唱会",
             description="用户参加了周杰伦演唱会",
             event_time="2026-06-15T20:00:00",
             created_at="2026-06-16T09:00:00",
             participants=[
-                MemoryTimelineParticipantResult(
+                MemoryTimelineParticipant(
                     entity_id="entity-1",
                     name="周杰伦",
                     type="生命体",
@@ -457,7 +457,7 @@ async def test_application_memory_service_returns_graph_view():
 
     graph = await service.graph()
 
-    assert graph == MemoryGraphViewResult(
+    assert graph == MemoryGraphView(
         nodes=repository.nodes,
         edges=repository.edges,
         communities=repository.communities,
@@ -472,7 +472,7 @@ async def test_application_memory_service_returns_graph_view():
 @pytest.mark.anyio
 async def test_application_memory_service_entity_subgraph_requires_visible_center():
     repository = FakeGraphViewRepository(
-        subgraph=MemoryEntitySubgraphResult(
+        subgraph=MemoryEntitySubgraphView(
             center="missing",
             nodes=[],
             edges=[],
@@ -502,14 +502,14 @@ async def test_application_memory_service_returns_profile_and_insights():
     profile = await service.profile()
     insights = await service.list_insights()
 
-    assert profile == MemoryProfileResult(
+    assert profile == MemoryProfile(
         total=1,
         type_counts={"生命体": 1},
         groups=[
-            MemoryProfileGroupResult(
+            MemoryProfileGroup(
                 type="生命体",
                 entities=[
-                    MemoryProfileEntityResult(
+                    MemoryProfileEntity(
                         id="entity-1",
                         name="周杰伦",
                         type="生命体",
@@ -522,7 +522,7 @@ async def test_application_memory_service_returns_profile_and_insights():
                         core_facts=["用户长期喜欢周杰伦"],
                         traits=["偏好华语流行"],
                         relations=[
-                            MemoryProfileRelationResult(
+                            MemoryProfileRelation(
                                 predicate="偏好",
                                 target_entity_id="entity-1",
                                 target_name="周杰伦",
@@ -536,7 +536,7 @@ async def test_application_memory_service_returns_profile_and_insights():
         ],
     )
     assert insights == [
-        InsightResult(
+        InsightView(
             id="insight-1",
             theme="音乐偏好",
             content="用户偏好华语流行音乐。",
@@ -589,7 +589,7 @@ async def test_application_memory_service_merges_duplicate_entities():
 
     stats = await service.merge_duplicates()
 
-    assert stats == MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
+    assert stats == MemoryDuplicateMergeStats(removed_entities=2, merged_groups=1)
     assert repository.calls == [("merge_duplicate_entities", "user-a")]
 
 
@@ -652,8 +652,8 @@ async def test_application_memory_service_returns_memory_detail_with_trace():
     assert detail.id == "memory-1"
     assert detail.content == "用户喜欢周杰伦。"
     assert detail.graph_available is True
-    assert detail.trace == MemoryTraceResult(
-        dialogue=MemoryTraceDialogueResult(
+    assert detail.trace == MemoryTrace(
+        dialogue=MemoryTraceDialogue(
             id="dialogue-1",
             memory_id="memory-1",
             summary="用户喜欢周杰伦。",
@@ -971,7 +971,7 @@ class InMemoryMemoryRepository:
         return counts
 
     async def recent_failed(self, user_id: str, limit: int):
-        from app.domain.models.memory_graph import MemoryQualityFailedMemoryResult
+        from app.domain.models.memory_graph import FailedMemorySnapshot
 
         failed = [
             memory
@@ -979,7 +979,7 @@ class InMemoryMemoryRepository:
             if memory.user_id == user_id and memory.status == MemoryStatus.FAILED
         ]
         return [
-            MemoryQualityFailedMemoryResult(
+            FailedMemorySnapshot(
                 id=memory.id,
                 content=memory.content,
                 error_msg=memory.error_msg,
@@ -1152,7 +1152,7 @@ class FakeCommunityServiceGraphRepository(FakeGraphRepository):
 
     async def community_members(self, user_id, community_id):
         return [
-            CommunityMemberResult(
+            CommunityMember(
                 entity_id="entity-1",
                 entity_name="周杰伦",
                 entity_type="生命体",
@@ -1163,7 +1163,7 @@ class FakeCommunityServiceGraphRepository(FakeGraphRepository):
 
     async def community_relationships(self, user_id, community_id):
         return [
-            CommunityRelationResult(
+            CommunityRelationFact(
                 source_entity_id="entity-user",
                 source_name="用户",
                 target_entity_id="entity-1",
@@ -1178,7 +1178,7 @@ class FakeCommunityServiceGraphRepository(FakeGraphRepository):
 
     async def list_communities(self, user_id):
         return [
-            CommunityResult(
+            CommunitySummary(
                 id="community-music",
                 name="音乐偏好",
                 summary="用户的音乐相关实体",
@@ -1198,14 +1198,14 @@ class FakeTimelineGraphRepository(FakeGraphRepository):
     async def event_timeline(self, user_id, limit):
         self.calls.append((user_id, limit))
         return [
-            MemoryTimelineEventResult(
+            MemoryTimelineEvent(
                 id="event-1",
                 title="参加周杰伦演唱会",
                 description="用户参加了周杰伦演唱会",
                 event_time="2026-06-15T20:00:00",
                 created_at="2026-06-16T09:00:00",
                 participants=[
-                    MemoryTimelineParticipantResult(
+                    MemoryTimelineParticipant(
                         entity_id="entity-1",
                         name="周杰伦",
                         type="生命体",
@@ -1219,7 +1219,7 @@ class FakeGraphViewRepository(FakeGraphRepository):
     def __init__(self, subgraph=None):
         super().__init__([])
         self.nodes = [
-            MemoryGraphNodeResult(
+            MemoryGraphNodeView(
                 id="entity-1",
                 name="周杰伦",
                 type="生命体",
@@ -1234,7 +1234,7 @@ class FakeGraphViewRepository(FakeGraphRepository):
             )
         ]
         self.edges = [
-            MemoryGraphEdgeResult(
+            MemoryGraphEdgeView(
                 source="entity-user",
                 target="entity-1",
                 predicate="偏好",
@@ -1242,14 +1242,14 @@ class FakeGraphViewRepository(FakeGraphRepository):
             )
         ]
         self.communities = [
-            CommunityResult(
+            CommunitySummary(
                 id="community-music",
                 name="音乐偏好",
                 summary="用户的音乐相关实体",
                 member_count=1,
             )
         ]
-        self.subgraph = subgraph or MemoryEntitySubgraphResult(
+        self.subgraph = subgraph or MemoryEntitySubgraphView(
             center="entity-1",
             nodes=self.nodes,
             edges=self.edges,
@@ -1280,7 +1280,7 @@ class FakeMemoryManagementGraphRepository(FakeGraphRepository):
     async def profile_entities(self, user_id):
         self.calls.append(("profile_entities", user_id))
         return [
-            MemoryProfileEntityResult(
+            MemoryProfileEntity(
                 id="entity-1",
                 name="周杰伦",
                 type="生命体",
@@ -1293,7 +1293,7 @@ class FakeMemoryManagementGraphRepository(FakeGraphRepository):
                 core_facts=["用户长期喜欢周杰伦"],
                 traits=["偏好华语流行"],
                 relations=[
-                    MemoryProfileRelationResult(
+                    MemoryProfileRelation(
                         predicate="偏好",
                         target_entity_id="entity-1",
                         target_name="周杰伦",
@@ -1311,7 +1311,7 @@ class FakeMemoryManagementGraphRepository(FakeGraphRepository):
     async def list_insights(self, user_id):
         self.calls.append(("list_insights", user_id))
         return [
-            InsightResult(
+            InsightView(
                 id="insight-1",
                 theme="音乐偏好",
                 content="用户偏好华语流行音乐。",
@@ -1331,7 +1331,7 @@ class FakeMemoryManagementGraphRepository(FakeGraphRepository):
 
     async def merge_duplicate_entities(self, user_id):
         self.calls.append(("merge_duplicate_entities", user_id))
-        return MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
+        return MemoryDuplicateMergeStats(removed_entities=2, merged_groups=1)
 
 
 class FakeQualityGraphRepository(FakeGraphRepository):
@@ -1341,7 +1341,7 @@ class FakeQualityGraphRepository(FakeGraphRepository):
 
     async def quality_graph_counts(self, user_id):
         self.calls.append(("quality_graph_counts", user_id))
-        return MemoryQualityGraphCountsResult(
+        return MemoryGraphCounts(
             dialogues=2,
             chunks=3,
             statements=4,
@@ -1355,7 +1355,7 @@ class FakeQualityGraphRepository(FakeGraphRepository):
 
     async def quality_issue_summary(self, user_id):
         self.calls.append(("quality_issue_summary", user_id))
-        return MemoryQualityIssueSummaryResult(
+        return MemoryQualityIssueSummary(
             duplicate_entities=2,
             missing_embeddings=1,
             broken_relations=1,
@@ -1363,11 +1363,11 @@ class FakeQualityGraphRepository(FakeGraphRepository):
 
     async def quality_issues(self, user_id, category, limit):
         self.calls.append(("quality_issues", user_id, category, limit))
-        return MemoryQualityIssueListResult(
+        return MemoryQualityIssueList(
             category=category,
             total=1,
             items=[
-                MemoryQualityIssueResult(
+                MemoryQualityIssue(
                     category=category,
                     severity="info",
                     title="重复实体",
@@ -1387,8 +1387,8 @@ class ExplodingQualityGraphRepository(FakeQualityGraphRepository):
 class FakeTraceGraphRepository(FakeGraphRepository):
     def __init__(self, trace=None):
         super().__init__([])
-        self.trace = trace or MemoryTraceResult(
-            dialogue=MemoryTraceDialogueResult(
+        self.trace = trace or MemoryTrace(
+            dialogue=MemoryTraceDialogue(
                 id="dialogue-1",
                 memory_id="memory-1",
                 summary="用户喜欢周杰伦。",

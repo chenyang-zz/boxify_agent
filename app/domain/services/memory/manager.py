@@ -11,7 +11,7 @@ from app.domain.models.long_term_memory import (
 from app.domain.models.memory_graph import (
     GraphRelationFact,
     LongTermMemoryGraphData,
-    MemoryGraphResult,
+    MemoryGraphSearchHit,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.repositories.vow import IUnitOfWork
@@ -122,7 +122,7 @@ class LongTermMemoryManager:
             return []
         return [self._graph_result_to_memory(result) for result in results]
 
-    def _graph_result_to_memory(self, result: MemoryGraphResult) -> LongTermMemory:
+    def _graph_result_to_memory(self, result: MemoryGraphSearchHit) -> LongTermMemory:
         """将图谱检索命中投影成长期记忆领域模型。"""
         relation_facts = result.relations
         summary = result.source_memory_summary or result.description or result.entity_name
@@ -134,12 +134,12 @@ class LongTermMemoryManager:
             status=MemoryStatus.COMPLETED,
             summary=summary,
             keywords=[value for value in [result.entity_name, result.entity_type] if value],
-            graph_data=LongTermMemoryGraphData.from_result(result),
+            graph_data=LongTermMemoryGraphData.from_search_hit(result),
         )
 
     @staticmethod
     def _format_graph_content(
-        result: MemoryGraphResult, relation_facts: list[GraphRelationFact]
+        result: MemoryGraphSearchHit, relation_facts: list[GraphRelationFact]
     ) -> str:
         """将一跳关系事实格式化为可给 Agent 阅读的记忆内容。"""
         if result.source_memory_summary:

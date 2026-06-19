@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from app.domain.models.long_term_memory import LongTermMemory, MemoryStatus
-from app.domain.models.memory_graph import MemoryQualityFailedMemoryResult
+from app.domain.models.memory_graph import FailedMemorySnapshot
 
 
 class MemoryRepository(ABC):
@@ -49,7 +49,7 @@ class MemoryRepository(ABC):
     @abstractmethod
     async def recent_failed(
         self, user_id: str, limit: int
-    ) -> list[MemoryQualityFailedMemoryResult]:
+    ) -> list[FailedMemorySnapshot]:
         """读取当前用户最近失败的记忆摘要。"""
         ...
 

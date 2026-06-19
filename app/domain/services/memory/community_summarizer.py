@@ -3,8 +3,8 @@ from pydantic import BaseModel, ConfigDict
 from app.domain.external.json_parser import JSONParser
 from app.domain.external.llm import LLM
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
+    CommunityMember,
+    CommunityRelationFact,
     CommunityVoteEntity,
 )
 from app.domain.services.prompts.memory import (
@@ -32,8 +32,8 @@ class MemoryCommunitySummarizer:
 
     async def summarize(
         self,
-        members: list[CommunityVoteEntity | CommunityMemberResult],
-        relationships: list[CommunityRelationResult],
+        members: list[CommunityVoteEntity | CommunityMember],
+        relationships: list[CommunityRelationFact],
     ) -> tuple[str, str]:
         """根据社区成员和内部关系生成中文名称、摘要。"""
         response = await self._llm.invoke(
@@ -55,7 +55,7 @@ class MemoryCommunitySummarizer:
 
 
 def _format_members(
-    members: list[CommunityVoteEntity | CommunityMemberResult],
+    members: list[CommunityVoteEntity | CommunityMember],
 ) -> str:
     """格式化社区成员供 LLM 阅读。"""
     lines = []
@@ -68,7 +68,7 @@ def _format_members(
     return "\n".join(lines)
 
 
-def _format_relationships(relationships: list[CommunityRelationResult]) -> str:
+def _format_relationships(relationships: list[CommunityRelationFact]) -> str:
     """格式化社区内部关系供 LLM 阅读。"""
     if not relationships:
         return "无"

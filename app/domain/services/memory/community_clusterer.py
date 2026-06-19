@@ -1,8 +1,8 @@
 import logging
 
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
+    CommunityMember,
+    CommunityRelationFact,
     CommunityVoteEntity,
     CommunityVoteNeighbor,
     MemoryCommunityClusterStats,
@@ -220,8 +220,8 @@ class MemoryCommunityClusterer:
 
     async def _summarize(
         self,
-        members: list[CommunityVoteEntity | CommunityMemberResult],
-        relationships: list[CommunityRelationResult],
+        members: list[CommunityVoteEntity | CommunityMember],
+        relationships: list[CommunityRelationFact],
     ) -> tuple[str, str]:
         """优先使用 LLM 摘要，缺失或空结果时兜底成员名。"""
         if self._summarizer:
@@ -260,13 +260,13 @@ class MemoryCommunityClusterer:
         return stable_memory_graph_id(self._user_id, "community", label)
 
 
-def _member_id(member: CommunityVoteEntity | CommunityMemberResult) -> str:
+def _member_id(member: CommunityVoteEntity | CommunityMember) -> str:
     """兼容聚类投票实体和 API 成员实体的 id 字段。"""
     return getattr(member, "id", None) or getattr(member, "entity_id")
 
 
 def _fallback_metadata(
-    members: list[CommunityVoteEntity | CommunityMemberResult],
+    members: list[CommunityVoteEntity | CommunityMember],
 ) -> tuple[str, str]:
     """无 LLM 时使用成员名生成稳定兜底名称和摘要。"""
     names = [

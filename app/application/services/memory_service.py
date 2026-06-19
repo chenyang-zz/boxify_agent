@@ -8,9 +8,9 @@ from app.domain.external.llm import LLM
 from app.domain.external.task_dispatcher import TaskDispatcher
 from app.domain.models.long_term_memory import (
     LongTermMemory,
-    MemoryDetailResult,
-    MemoryReextractItemResult,
-    MemoryReextractResult,
+    LongTermMemoryDetail,
+    MemoryReextractItem,
+    MemoryReextractBatch,
     MemorySource,
     MemoryStatus,
 )
@@ -20,22 +20,22 @@ from app.domain.models.memory_graph import (
     MemoryReflectStats,
 )
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
-    CommunityResult,
-    InsightResult,
-    MemoryEntitySubgraphResult,
+    CommunityMember,
+    CommunityRelationFact,
+    CommunitySummary,
+    InsightView,
+    MemoryEntitySubgraphView,
     MemoryCommunityClusterStats,
-    MemoryGraphViewResult,
-    MemoryMergeDuplicatesResult,
-    MemoryProfileGroupResult,
-    MemoryProfileResult,
-    MemoryQualityGraphCountsResult,
-    MemoryQualityIssueListResult,
-    MemoryQualityIssueSummaryResult,
-    MemoryQualityOverviewResult,
-    MemoryRelationHistoryResult,
-    MemoryTimelineEventResult,
+    MemoryGraphView,
+    MemoryDuplicateMergeStats,
+    MemoryProfileGroup,
+    MemoryProfile,
+    MemoryGraphCounts,
+    MemoryQualityIssueList,
+    MemoryQualityIssueSummary,
+    MemoryQualityOverview,
+    MemoryRelationHistoryItem,
+    MemoryTimelineEvent,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.repositories.vow import IUnitOfWork
@@ -132,7 +132,7 @@ class MemoryService:
         if not await self._memory.delete_memory(memory_id):
             raise NotFoundError("记忆不存在或无权访问")
 
-    async def reextract_memory(self, memory_id: str) -> MemoryReextractResult:
+    async def reextract_memory(self, memory_id: str) -> MemoryReextractBatch:
         """重新派发当前用户单条记忆的图谱萃取任务。"""
         async with self._uow_factory() as uow:
             memory = await uow.memory.get_by_user(self._user_id, memory_id)
@@ -145,13 +145,13 @@ class MemoryService:
         except Exception as e:
             logger.warning("记忆重萃取派发失败: %s", e)
             raise BadRequestError("记忆重萃取派发失败") from e
-        return MemoryReextractResult(
+        return MemoryReextractBatch(
             matched=1,
             dispatched=1,
             skipped=0,
             dry_run=False,
             items=[
-                MemoryReextractItemResult(
+                MemoryReextractItem(
                     memory_id=memory.id,
                     status=memory.status,
                     graph_dialogue_id=memory.graph_dialogue_id,
@@ -167,7 +167,7 @@ class MemoryService:
         only_missing_graph: bool = False,
         dry_run: bool = False,
         limit: int | None = None,
-    ) -> MemoryReextractResult:
+    ) -> MemoryReextractBatch:
         """批量选择当前用户 PG 记忆并重新派发图谱萃取任务。"""
         if not dry_run and not self._task_dispatcher:
             raise BadRequestError("记忆任务派发器不可用")
@@ -185,11 +185,11 @@ class MemoryService:
                 only_missing_graph=only_missing_graph,
                 limit=normalized_limit,
             )
-        items: list[MemoryReextractItemResult] = []
+        items: list[MemoryReextractItem] = []
         errors: list[str] = []
         dispatched = 0
         if dry_run:
-            return MemoryReextractResult(
+            return MemoryReextractBatch(
                 matched=len(candidates),
                 dispatched=0,
                 skipped=len(candidates),
@@ -216,7 +216,7 @@ class MemoryService:
                 continue
             dispatched += 1
             items.append(_memory_to_reextract_item(memory, dispatched=True))
-        return MemoryReextractResult(
+        return MemoryReextractBatch(
             matched=len(candidates),
             dispatched=dispatched,
             skipped=len(candidates) - dispatched,
@@ -225,14 +225,14 @@ class MemoryService:
             errors=errors,
         )
 
-    async def detail(self, memory_id: str) -> MemoryDetailResult:
+    async def detail(self, memory_id: str) -> LongTermMemoryDetail:
         """读取当前用户单条长期记忆及其图谱溯源详情。"""
         async with self._uow_factory() as uow:
             memory = await uow.memory.get_by_user(self._user_id, memory_id)
         if memory is None:
             raise NotFoundError("记忆不存在或无权访问")
         if not self._graph_repository:
-            return MemoryDetailResult(
+            return LongTermMemoryDetail(
                 **memory.model_dump(mode="python"),
                 graph_available=False,
                 trace=None,
@@ -244,12 +244,12 @@ class MemoryService:
             )
         except Exception as e:
             logger.warning("记忆图谱溯源查询失败，返回 PG 详情: %s", e)
-            return MemoryDetailResult(
+            return LongTermMemoryDetail(
                 **memory.model_dump(mode="python"),
                 graph_available=False,
                 trace=None,
             )
-        return MemoryDetailResult(
+        return LongTermMemoryDetail(
             **memory.model_dump(mode="python"),
             graph_available=True,
             trace=trace,
@@ -289,7 +289,7 @@ class MemoryService:
         )
         return await clusterer.cluster()
 
-    async def list_communities(self) -> list[CommunityResult]:
+    async def list_communities(self) -> list[CommunitySummary]:
         """列出当前用户记忆社区。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询社区")
@@ -297,7 +297,7 @@ class MemoryService:
 
     async def community_detail(
         self, community_id: str
-    ) -> tuple[list[CommunityMemberResult], list[CommunityRelationResult]]:
+    ) -> tuple[list[CommunityMember], list[CommunityRelationFact]]:
         """读取当前用户指定社区成员和社区内关系。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询社区")
@@ -309,27 +309,27 @@ class MemoryService:
         )
         return members, relationships
 
-    async def timeline(self, limit: int = 50) -> list[MemoryTimelineEventResult]:
+    async def timeline(self, limit: int = 50) -> list[MemoryTimelineEvent]:
         """读取当前用户记忆事件时间线。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询事件时间线")
         limit = max(1, min(limit, 200))
         return await self._graph_repository.event_timeline(self._user_id, limit)
 
-    async def graph(self) -> MemoryGraphViewResult:
+    async def graph(self) -> MemoryGraphView:
         """读取当前用户完整实体关系图。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询实体关系图")
         nodes = await self._graph_repository.graph_nodes(self._user_id)
         edges = await self._graph_repository.graph_edges(self._user_id)
         communities = await self._graph_repository.list_communities(self._user_id)
-        return MemoryGraphViewResult(
+        return MemoryGraphView(
             nodes=nodes,
             edges=edges,
             communities=communities,
         )
 
-    async def entity_subgraph(self, entity_id: str) -> MemoryEntitySubgraphResult:
+    async def entity_subgraph(self, entity_id: str) -> MemoryEntitySubgraphView:
         """读取当前用户单实体一跳子图。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询实体关系图")
@@ -340,7 +340,7 @@ class MemoryService:
             raise NotFoundError("实体不存在或无权访问")
         return subgraph
 
-    async def profile(self) -> MemoryProfileResult:
+    async def profile(self) -> MemoryProfile:
         """读取当前用户记忆画像。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询画像")
@@ -349,16 +349,16 @@ class MemoryService:
         grouped: dict[str, list] = {}
         for entity in entities:
             grouped.setdefault(entity.type, []).append(entity)
-        return MemoryProfileResult(
+        return MemoryProfile(
             total=len(entities),
             type_counts=type_counts,
             groups=[
-                MemoryProfileGroupResult(type=entity_type, entities=items)
+                MemoryProfileGroup(type=entity_type, entities=items)
                 for entity_type, items in grouped.items()
             ],
         )
 
-    async def list_insights(self) -> list[InsightResult]:
+    async def list_insights(self) -> list[InsightView]:
         """列出当前用户长期记忆洞察。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询洞察")
@@ -378,7 +378,7 @@ class MemoryService:
         if not await self._graph_repository.delete_entity(self._user_id, entity_id):
             raise NotFoundError("实体不存在或无权访问")
 
-    async def merge_duplicates(self) -> MemoryMergeDuplicatesResult:
+    async def merge_duplicates(self) -> MemoryDuplicateMergeStats:
         """合并当前用户历史同名同类型重复实体。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法合并重复实体")
@@ -386,7 +386,7 @@ class MemoryService:
 
     async def relation_history(
         self, entity_id: str, predicate: str | None = None
-    ) -> list[MemoryRelationHistoryResult]:
+    ) -> list[MemoryRelationHistoryItem]:
         """读取当前用户单实体一跳关系历史。"""
         if not self._graph_repository:
             raise BadRequestError("记忆图谱不可用，无法查询关系历史")
@@ -399,14 +399,14 @@ class MemoryService:
             raise NotFoundError("实体不存在或无权访问")
         return relations
 
-    async def quality(self) -> MemoryQualityOverviewResult:
+    async def quality(self) -> MemoryQualityOverview:
         """读取当前用户记忆质量审计总览。"""
         async with self._uow_factory() as uow:
             pg_status_counts = await uow.memory.status_counts(self._user_id)
             recent_failed = await uow.memory.recent_failed(self._user_id, limit=5)
         pg_total = sum(pg_status_counts.values())
         if not self._graph_repository:
-            return MemoryQualityOverviewResult(
+            return MemoryQualityOverview(
                 pg_total=pg_total,
                 pg_status_counts=pg_status_counts,
                 recent_failed=recent_failed,
@@ -421,15 +421,15 @@ class MemoryService:
             )
         except Exception as e:
             logger.warning("记忆质量审计图谱统计失败，返回 PG 统计: %s", e)
-            return MemoryQualityOverviewResult(
+            return MemoryQualityOverview(
                 pg_total=pg_total,
                 pg_status_counts=pg_status_counts,
                 recent_failed=recent_failed,
                 graph_available=False,
-                graph_counts=MemoryQualityGraphCountsResult(),
-                issue_summary=MemoryQualityIssueSummaryResult(),
+                graph_counts=MemoryGraphCounts(),
+                issue_summary=MemoryQualityIssueSummary(),
             )
-        return MemoryQualityOverviewResult(
+        return MemoryQualityOverview(
             pg_total=pg_total,
             pg_status_counts=pg_status_counts,
             recent_failed=recent_failed,
@@ -440,7 +440,7 @@ class MemoryService:
 
     async def quality_issues(
         self, category: str, limit: int
-    ) -> MemoryQualityIssueListResult:
+    ) -> MemoryQualityIssueList:
         """读取指定类别的记忆质量问题样本。"""
         if category not in MEMORY_QUALITY_ISSUE_CATEGORIES:
             raise BadRequestError("未知质量问题类别")
@@ -463,9 +463,9 @@ def _memory_to_reextract_item(
     *,
     dispatched: bool,
     error: str | None = None,
-) -> MemoryReextractItemResult:
+) -> MemoryReextractItem:
     """把 PG 记忆转换为重萃取候选项。"""
-    return MemoryReextractItemResult(
+    return MemoryReextractItem(
         memory_id=memory.id,
         status=memory.status,
         graph_dialogue_id=memory.graph_dialogue_id,

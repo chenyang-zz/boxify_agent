@@ -6,7 +6,7 @@ from app.domain.models.memory_graph import (
     EntityNode,
     MemoryEntityDedupCandidate,
     MemoryEntityDedupDecision,
-    MemoryEntityDedupResult,
+    MemoryEntityDeduplication,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from app.domain.services.prompts.memory import (
@@ -39,7 +39,7 @@ class MemoryEntityDeduplicator:
 
     async def dedup_batch(
         self, entity_by_idx: dict[int, EntityNode]
-    ) -> MemoryEntityDedupResult:
+    ) -> MemoryEntityDeduplication:
         """对本次 LLM 输出的实体做批内同名和模糊消歧。"""
         canonical_items: list[tuple[int, EntityNode]] = []
         final_by_idx: dict[int, EntityNode] = {}
@@ -96,7 +96,7 @@ class MemoryEntityDeduplicator:
         user_id: str,
         entity_by_idx: dict[int, EntityNode],
         graph_repository: MemoryGraphRepository,
-    ) -> MemoryEntityDedupResult:
+    ) -> MemoryEntityDeduplication:
         """写图前把本次实体与已有同类型实体做同名和模糊融合。"""
         cache: dict[str, list[EntityNode]] = {}
         redirects: dict[str, str] = {}
@@ -321,7 +321,7 @@ class MemoryEntityDeduplicator:
         self,
         entity_by_idx: dict[int, EntityNode],
         redirects: dict[str, str],
-    ) -> MemoryEntityDedupResult:
+    ) -> MemoryEntityDeduplication:
         """收敛最终实体集合、索引映射和 ID 重定向表。"""
         unique_by_id: dict[str, EntityNode] = {}
         for entity in entity_by_idx.values():
@@ -336,7 +336,7 @@ class MemoryEntityDeduplicator:
             for idx, entity in entity_by_idx.items()
             if entity.id in unique_by_id
         }
-        return MemoryEntityDedupResult(
+        return MemoryEntityDeduplication(
             entities=list(unique_by_id.values()),
             entity_by_idx=remapped,
             redirects=redirects,

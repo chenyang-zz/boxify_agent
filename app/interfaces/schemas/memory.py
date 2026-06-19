@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.models.long_term_memory import (
     LongTermMemory,
-    MemoryDetailResult,
+    LongTermMemoryDetail,
     MemorySource,
     MemoryStatus,
 )
@@ -472,6 +472,6 @@ class MemoryDetailResponse(MemoryResponse):
     trace: MemoryTraceResponse | None = None
 
     @classmethod
-    def from_domain(cls, memory: MemoryDetailResult) -> "MemoryDetailResponse":
+    def from_domain(cls, memory: LongTermMemoryDetail) -> "MemoryDetailResponse":
         """从领域详情模型构造响应。"""
         return cls.model_validate(memory.model_dump(mode="python"))

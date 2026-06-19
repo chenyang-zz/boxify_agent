@@ -4,9 +4,9 @@ import logging
 from app.domain.external.embedding import EmbeddingModel
 from app.domain.models.memory_graph import (
     GraphRelationFact,
-    MemoryActiveRecallCommunityResult,
-    MemoryActiveRecallEventResult,
-    MemoryGraphResult,
+    MemoryActiveRecallCommunityHit,
+    MemoryActiveRecallEventHit,
+    MemoryGraphSearchHit,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
 from core.config import get_settings
@@ -127,7 +127,7 @@ class MemoryActiveRecall:
         return block if len(block) <= max_chars else block[:max_chars] + "..."
 
 
-def _format_entity_lines(result: MemoryGraphResult) -> list[str]:
+def _format_entity_lines(result: MemoryGraphSearchHit) -> list[str]:
     """把实体命中和一跳关系格式化为简短背景行。"""
     lines = [
         f"- {result.entity_name}：{result.description}"
@@ -139,19 +139,19 @@ def _format_entity_lines(result: MemoryGraphResult) -> list[str]:
     return lines
 
 
-def _format_relation(result: MemoryGraphResult, relation: GraphRelationFact) -> str:
+def _format_relation(result: MemoryGraphSearchHit, relation: GraphRelationFact) -> str:
     """按关系方向还原事实读法。"""
     if relation.direction == "incoming":
         return f"{relation.neighbor_name} {relation.name} {result.entity_name}"
     return f"{result.entity_name} {relation.name} {relation.neighbor_name}"
 
 
-def _format_community(result: MemoryActiveRecallCommunityResult) -> str:
+def _format_community(result: MemoryActiveRecallCommunityHit) -> str:
     """格式化主动召回命中的主题社区。"""
     return f"{result.name}：{result.summary}" if result.summary else result.name
 
 
-def _format_event(result: MemoryActiveRecallEventResult) -> str:
+def _format_event(result: MemoryActiveRecallEventHit) -> str:
     """格式化主动召回命中的经历事件。"""
     event_time = result.event_time.isoformat() if result.event_time else "时间未明"
     participants = "、".join(participant.name for participant in result.participants)

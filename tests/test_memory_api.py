@@ -5,37 +5,37 @@ from app.application.services.auth_service import AuthService
 from app.application.services.memory_service import MemoryService
 from app.domain.models.long_term_memory import LongTermMemory, MemoryStatus
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
-    CommunityResult,
-    InsightResult,
+    CommunityMember,
+    CommunityRelationFact,
+    CommunitySummary,
+    InsightView,
     MemoryCommunityClusterStats,
     MemoryConsolidationStats,
-    MemoryEntitySubgraphResult,
-    MemoryGraphEdgeResult,
-    MemoryGraphNodeResult,
-    MemoryGraphViewResult,
-    MemoryMergeDuplicatesResult,
-    MemoryProfileEntityResult,
-    MemoryProfileGroupResult,
-    MemoryProfileRelationResult,
-    MemoryProfileResult,
-    MemoryQualityFailedMemoryResult,
-    MemoryQualityGraphCountsResult,
-    MemoryQualityIssueListResult,
-    MemoryQualityIssueResult,
-    MemoryQualityIssueSummaryResult,
-    MemoryQualityOverviewResult,
+    MemoryEntitySubgraphView,
+    MemoryGraphEdgeView,
+    MemoryGraphNodeView,
+    MemoryGraphView,
+    MemoryDuplicateMergeStats,
+    MemoryProfileEntity,
+    MemoryProfileGroup,
+    MemoryProfileRelation,
+    MemoryProfile,
+    FailedMemorySnapshot,
+    MemoryGraphCounts,
+    MemoryQualityIssueList,
+    MemoryQualityIssue,
+    MemoryQualityIssueSummary,
+    MemoryQualityOverview,
     MemoryReflectStats,
-    MemoryRelationHistoryResult,
-    MemoryTraceDialogueResult,
-    MemoryTraceResult,
-    MemoryTimelineEventResult,
-    MemoryTimelineParticipantResult,
+    MemoryRelationHistoryItem,
+    MemoryTraceDialogue,
+    MemoryTrace,
+    MemoryTimelineEvent,
+    MemoryTimelineParticipant,
 )
 from app.domain.models.long_term_memory import (
-    MemoryReextractItemResult,
-    MemoryReextractResult,
+    MemoryReextractItem,
+    MemoryReextractBatch,
 )
 from app.domain.models.user import User
 from app.interfaces import service_dependencies
@@ -809,7 +809,7 @@ class MemoryApiUnitOfWork:
 
 class FakeDetailMemoryService:
     async def detail(self, memory_id):
-        from app.domain.models.long_term_memory import MemoryDetailResult
+        from app.domain.models.long_term_memory import LongTermMemoryDetail
 
         if memory_id == "missing":
             raise NotFoundError("记忆不存在或无权访问")
@@ -820,11 +820,11 @@ class FakeDetailMemoryService:
                 status=MemoryStatus.COMPLETED,
                 summary="用户喜欢周杰伦。",
         )
-        return MemoryDetailResult(
+        return LongTermMemoryDetail(
             **memory.model_dump(mode="python"),
             graph_available=True,
-            trace=MemoryTraceResult(
-                dialogue=MemoryTraceDialogueResult(
+            trace=MemoryTrace(
+                dialogue=MemoryTraceDialogue(
                     id="dialogue-1",
                     memory_id="memory-1",
                     summary="用户喜欢周杰伦。",
@@ -837,13 +837,13 @@ class FakeReextractMemoryService:
     async def reextract_memory(self, memory_id):
         if memory_id == "missing":
             raise NotFoundError("记忆不存在或无权访问")
-        return MemoryReextractResult(
+        return MemoryReextractBatch(
             matched=1,
             dispatched=1,
             skipped=0,
             dry_run=False,
             items=[
-                MemoryReextractItemResult(
+                MemoryReextractItem(
                     memory_id=memory_id,
                     status=MemoryStatus.FAILED,
                     dispatched=True,
@@ -864,13 +864,13 @@ class FakeReextractMemoryService:
         assert only_missing_graph is False
         assert dry_run is True
         assert limit == 20
-        return MemoryReextractResult(
+        return MemoryReextractBatch(
             matched=1,
             dispatched=0,
             skipped=1,
             dry_run=True,
             items=[
-                MemoryReextractItemResult(
+                MemoryReextractItem(
                     memory_id="memory-failed",
                     status=MemoryStatus.FAILED,
                     dispatched=False,
@@ -904,7 +904,7 @@ class FakeCommunityMemoryService:
 
     async def list_communities(self):
         return [
-            CommunityResult(
+            CommunitySummary(
                 id="community-music",
                 name="音乐偏好",
                 summary="用户的音乐相关实体",
@@ -915,7 +915,7 @@ class FakeCommunityMemoryService:
     async def community_detail(self, community_id):
         return (
             [
-                CommunityMemberResult(
+                CommunityMember(
                     entity_id="entity-1",
                     entity_name="周杰伦",
                     entity_type="生命体",
@@ -924,7 +924,7 @@ class FakeCommunityMemoryService:
                 )
             ],
             [
-                CommunityRelationResult(
+                CommunityRelationFact(
                     source_entity_id="entity-user",
                     source_name="用户",
                     target_entity_id="entity-1",
@@ -940,14 +940,14 @@ class FakeTimelineMemoryService:
     async def timeline(self, limit):
         assert limit == 50
         return [
-            MemoryTimelineEventResult(
+            MemoryTimelineEvent(
                 id="event-1",
                 title="参加周杰伦演唱会",
                 description="用户参加了周杰伦演唱会",
                 event_time="2026-06-15T20:00:00",
                 created_at="2026-06-16T09:00:00",
                 participants=[
-                    MemoryTimelineParticipantResult(
+                    MemoryTimelineParticipant(
                         entity_id="entity-1",
                         name="周杰伦",
                         type="生命体",
@@ -960,7 +960,7 @@ class FakeTimelineMemoryService:
 class FakeGraphMemoryService:
     def __init__(self):
         self.nodes = [
-            MemoryGraphNodeResult(
+            MemoryGraphNodeView(
                 id="entity-1",
                 name="周杰伦",
                 type="生命体",
@@ -975,7 +975,7 @@ class FakeGraphMemoryService:
             )
         ]
         self.edges = [
-            MemoryGraphEdgeResult(
+            MemoryGraphEdgeView(
                 source="entity-user",
                 target="entity-1",
                 predicate="偏好",
@@ -983,7 +983,7 @@ class FakeGraphMemoryService:
             )
         ]
         self.communities = [
-            CommunityResult(
+            CommunitySummary(
                 id="community-music",
                 name="音乐偏好",
                 summary="用户的音乐相关实体",
@@ -992,7 +992,7 @@ class FakeGraphMemoryService:
         ]
 
     async def graph(self):
-        return MemoryGraphViewResult(
+        return MemoryGraphView(
             nodes=self.nodes,
             edges=self.edges,
             communities=self.communities,
@@ -1001,7 +1001,7 @@ class FakeGraphMemoryService:
     async def entity_subgraph(self, entity_id):
         if entity_id == "missing":
             raise NotFoundError("实体不存在或无权访问")
-        return MemoryEntitySubgraphResult(
+        return MemoryEntitySubgraphView(
             center=entity_id,
             nodes=self.nodes,
             edges=self.edges,
@@ -1010,14 +1010,14 @@ class FakeGraphMemoryService:
 
 class FakeManagementMemoryService:
     async def profile(self):
-        return MemoryProfileResult(
+        return MemoryProfile(
             total=1,
             type_counts={"生命体": 1},
             groups=[
-                MemoryProfileGroupResult(
+                MemoryProfileGroup(
                     type="生命体",
                     entities=[
-                        MemoryProfileEntityResult(
+                        MemoryProfileEntity(
                             id="entity-1",
                             name="周杰伦",
                             type="生命体",
@@ -1030,7 +1030,7 @@ class FakeManagementMemoryService:
                             core_facts=["用户长期喜欢周杰伦"],
                             traits=["偏好华语流行"],
                             relations=[
-                                MemoryProfileRelationResult(
+                                MemoryProfileRelation(
                                     predicate="偏好",
                                     target_entity_id="entity-1",
                                     target_name="周杰伦",
@@ -1046,7 +1046,7 @@ class FakeManagementMemoryService:
 
     async def list_insights(self):
         return [
-            InsightResult(
+            InsightView(
                 id="insight-1",
                 theme="音乐偏好",
                 content="用户偏好华语流行音乐。",
@@ -1057,7 +1057,7 @@ class FakeManagementMemoryService:
         ]
 
     async def merge_duplicates(self):
-        return MemoryMergeDuplicatesResult(removed_entities=2, merged_groups=1)
+        return MemoryDuplicateMergeStats(removed_entities=2, merged_groups=1)
 
     async def delete_entity(self, entity_id):
         if entity_id == "missing":
@@ -1072,7 +1072,7 @@ class FakeManagementMemoryService:
             raise NotFoundError("实体不存在或无权访问")
         assert predicate == "就职于"
         return [
-            MemoryRelationHistoryResult(
+            MemoryRelationHistoryItem(
                 relation_id="rel-current",
                 direction="outgoing",
                 neighbor_entity_id="entity-company",
@@ -1089,7 +1089,7 @@ class FakeManagementMemoryService:
 
 class FakeQualityMemoryService:
     async def quality(self):
-        return MemoryQualityOverviewResult(
+        return MemoryQualityOverview(
             generated_at="2026-06-18T10:00:00",
             pg_total=3,
             pg_status_counts={
@@ -1099,7 +1099,7 @@ class FakeQualityMemoryService:
                 "failed": 1,
             },
             recent_failed=[
-                MemoryQualityFailedMemoryResult(
+                FailedMemorySnapshot(
                     id="memory-failed",
                     content="失败记忆",
                     error_msg="LLM timeout",
@@ -1107,7 +1107,7 @@ class FakeQualityMemoryService:
                 )
             ],
             graph_available=True,
-            graph_counts=MemoryQualityGraphCountsResult(
+            graph_counts=MemoryGraphCounts(
                 dialogues=1,
                 chunks=2,
                 statements=3,
@@ -1118,7 +1118,7 @@ class FakeQualityMemoryService:
                 communities=8,
                 insights=9,
             ),
-            issue_summary=MemoryQualityIssueSummaryResult(
+            issue_summary=MemoryQualityIssueSummary(
                 duplicate_entities=2,
                 missing_embeddings=1,
                 broken_relations=1,
@@ -1129,11 +1129,11 @@ class FakeQualityMemoryService:
     async def quality_issues(self, category, limit):
         assert category == "duplicate_entities"
         assert limit == 50
-        return MemoryQualityIssueListResult(
+        return MemoryQualityIssueList(
             category=category,
             total=1,
             items=[
-                MemoryQualityIssueResult(
+                MemoryQualityIssue(
                     category=category,
                     severity="info",
                     title="重复实体",

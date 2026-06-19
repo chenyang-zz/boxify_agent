@@ -2,40 +2,40 @@ import logging
 from typing import Any
 
 from app.domain.models.memory_graph import (
-    CommunityMemberResult,
-    CommunityRelationResult,
-    CommunityResult,
+    CommunityMember,
+    CommunityRelationFact,
+    CommunitySummary,
     CommunityVoteEntity,
     CommunityVoteNeighbor,
     EntityNode,
     GraphRelationFact,
-    InsightResult,
-    MemoryActiveRecallCommunityResult,
-    MemoryActiveRecallEventResult,
-    MemoryEntitySubgraphResult,
+    InsightView,
+    MemoryActiveRecallCommunityHit,
+    MemoryActiveRecallEventHit,
+    MemoryEntitySubgraphView,
     MemoryGraph,
-    MemoryGraphEdgeResult,
-    MemoryGraphNodeResult,
-    MemoryGraphResult,
-    MemoryMergeDuplicatesResult,
-    MemoryProfileEntityResult,
-    MemoryProfileRelationResult,
+    MemoryGraphEdgeView,
+    MemoryGraphNodeView,
+    MemoryGraphSearchHit,
+    MemoryDuplicateMergeStats,
+    MemoryProfileEntity,
+    MemoryProfileRelation,
     MemoryPromotionStats,
-    MemoryQualityGraphCountsResult,
-    MemoryQualityIssueListResult,
-    MemoryQualityIssueResult,
-    MemoryQualityIssueSummaryResult,
-    MemoryRelationHistoryResult,
-    MemoryTimelineEventResult,
-    MemoryTimelineParticipantResult,
-    MemoryTraceChunkResult,
-    MemoryTraceDialogueResult,
-    MemoryTraceEntityResult,
-    MemoryTraceEventResult,
-    MemoryTraceMentionResult,
-    MemoryTraceRelationResult,
-    MemoryTraceResult,
-    MemoryTraceStatementResult,
+    MemoryGraphCounts,
+    MemoryQualityIssueList,
+    MemoryQualityIssue,
+    MemoryQualityIssueSummary,
+    MemoryRelationHistoryItem,
+    MemoryTimelineEvent,
+    MemoryTimelineParticipant,
+    MemoryTraceChunk,
+    MemoryTraceDialogue,
+    MemoryTraceEntity,
+    MemoryTraceEvent,
+    MemoryTraceMention,
+    MemoryTraceRelation,
+    MemoryTrace,
+    MemoryTraceStatement,
     stable_memory_graph_id,
 )
 from app.domain.repositories.memory_graph_repository import MemoryGraphRepository
@@ -192,7 +192,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         query: str,
         top_k: int,
         query_embedding: list[float] | None = None,
-    ) -> list[MemoryGraphResult]:
+    ) -> list[MemoryGraphSearchHit]:
         """混合召回实体及一跳关系，Neo4j 不可用时由上层降级。"""
         fulltext_rows = await self._search_fulltext(
             user_id=user_id, query=query, top_k=top_k
@@ -423,7 +423,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def search_insights_by_vector(
         self, user_id: str, query_embedding: list[float], top_k: int
-    ) -> list[InsightResult]:
+    ) -> list[InsightView]:
         """按当前用户精确计算向量相似度召回洞察。"""
         cypher = """
         MATCH (insight:Insight {user_id: $user_id})
@@ -453,7 +453,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def search_communities_by_vector(
         self, user_id: str, query_embedding: list[float], top_k: int
-    ) -> list[MemoryActiveRecallCommunityResult]:
+    ) -> list[MemoryActiveRecallCommunityHit]:
         """用社区成员平均向量召回当前用户相关主题社区。"""
         communities = {
             community.id: community for community in await self.list_communities(user_id)
@@ -465,7 +465,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 embeddings_by_community.setdefault(entity.community_id, []).append(
                     entity.embedding
                 )
-        results: list[MemoryActiveRecallCommunityResult] = []
+        results: list[MemoryActiveRecallCommunityHit] = []
         for community_id, embeddings in embeddings_by_community.items():
             community = communities.get(community_id)
             if not community:
@@ -474,7 +474,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             if score <= 0:
                 continue
             results.append(
-                MemoryActiveRecallCommunityResult(
+                MemoryActiveRecallCommunityHit(
                     id=community.id,
                     name=community.name,
                     summary=community.summary,
@@ -486,7 +486,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def search_events_by_vector_or_text(
         self, user_id: str, query: str, query_embedding: list[float], top_k: int
-    ) -> list[MemoryActiveRecallEventResult]:
+    ) -> list[MemoryActiveRecallEventHit]:
         """用标题描述文本或参与实体平均向量召回当前用户相关经历事件。"""
         cypher = """
         MATCH (event:Event {user_id: $user_id})
@@ -512,7 +512,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             result = await session.run(cypher, user_id=user_id)
             rows = await result.data()
         normalized_query = query.strip().lower()
-        results: list[MemoryActiveRecallEventResult] = []
+        results: list[MemoryActiveRecallEventHit] = []
         for row in rows:
             text_score = _event_text_score(row, normalized_query)
             participant_embeddings = [
@@ -529,14 +529,14 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 continue
             event = self._row_to_timeline_event(row)
             results.append(
-                MemoryActiveRecallEventResult(
+                MemoryActiveRecallEventHit(
                     **event.model_dump(mode="python"),
                     score=score,
                 )
             )
         return sorted(results, key=lambda item: item.score, reverse=True)[:top_k]
 
-    async def list_insights(self, user_id: str) -> list[InsightResult]:
+    async def list_insights(self, user_id: str) -> list[InsightView]:
         """列出用户洞察。"""
         cypher = """
         MATCH (insight:Insight {user_id: $user_id})
@@ -586,7 +586,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def event_timeline(
         self, user_id: str, limit: int
-    ) -> list[MemoryTimelineEventResult]:
+    ) -> list[MemoryTimelineEvent]:
         """读取当前用户事件时间线。"""
         cypher = """
         MATCH (event:Event {user_id: $user_id})
@@ -616,7 +616,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def memory_trace(
         self, user_id: str, memory_id: str
-    ) -> MemoryTraceResult | None:
+    ) -> MemoryTrace | None:
         """读取当前用户单条 PG 记忆对应的四层图谱溯源。"""
         cypher = """
         MATCH (dialogue:Dialogue {user_id: $user_id, memory_id: $memory_id})
@@ -873,7 +873,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def community_members(
         self, user_id: str, community_id: str
-    ) -> list[CommunityMemberResult]:
+    ) -> list[CommunityMember]:
         """读取社区成员实体。"""
         cypher = """
         MATCH (entity:Entity {user_id: $user_id, community_id: $community_id})
@@ -900,7 +900,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def community_relationships(
         self, user_id: str, community_id: str
-    ) -> list[CommunityRelationResult]:
+    ) -> list[CommunityRelationFact]:
         """读取社区内部关系事实。"""
         cypher = """
         MATCH (source:Entity {user_id: $user_id, community_id: $community_id})
@@ -948,7 +948,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 summary=summary,
             )
 
-    async def list_communities(self, user_id: str) -> list[CommunityResult]:
+    async def list_communities(self, user_id: str) -> list[CommunitySummary]:
         """列出当前用户社区。"""
         cypher = """
         MATCH (community:Community {user_id: $user_id})
@@ -974,7 +974,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         async with self._driver.session(database=self._database) as session:
             await session.run(cypher, user_id=user_id)
 
-    async def graph_nodes(self, user_id: str) -> list[MemoryGraphNodeResult]:
+    async def graph_nodes(self, user_id: str) -> list[MemoryGraphNodeView]:
         """读取当前用户实体关系全图节点。"""
         cypher = """
         MATCH (entity:Entity {user_id: $user_id})
@@ -997,7 +997,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             rows = await result.data()
         return [self._row_to_graph_node(row) for row in rows]
 
-    async def graph_edges(self, user_id: str) -> list[MemoryGraphEdgeResult]:
+    async def graph_edges(self, user_id: str) -> list[MemoryGraphEdgeView]:
         """读取当前用户实体关系全图边。"""
         cypher = """
         MATCH (source:Entity {user_id: $user_id})
@@ -1021,7 +1021,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def entity_subgraph(
         self, user_id: str, entity_id: str
-    ) -> MemoryEntitySubgraphResult:
+    ) -> MemoryEntitySubgraphView:
         """读取当前用户指定实体的一跳子图。"""
         node_cypher = """
         MATCH (center:Entity {id: $entity_id, user_id: $user_id})
@@ -1080,7 +1080,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 entity_id=entity_id,
             )
             edge_rows = await edge_result.data()
-        return MemoryEntitySubgraphResult(
+        return MemoryEntitySubgraphView(
             center=entity_id,
             nodes=[self._row_to_graph_node(row) for row in node_rows],
             edges=[self._row_to_graph_edge(row) for row in edge_rows],
@@ -1088,7 +1088,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def profile_entities(
         self, user_id: str
-    ) -> list[MemoryProfileEntityResult]:
+    ) -> list[MemoryProfileEntity]:
         """读取当前用户画像实体及一跳出边事实。"""
         cypher = """
         MATCH (entity:Entity {user_id: $user_id})
@@ -1133,7 +1133,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def entity_relation_history(
         self, user_id: str, entity_id: str, predicate: str | None = None
-    ) -> list[MemoryRelationHistoryResult] | None:
+    ) -> list[MemoryRelationHistoryItem] | None:
         """读取当前用户单实体一跳关系历史。"""
         exists_cypher = """
         MATCH (center:Entity {id: $entity_id, user_id: $user_id})
@@ -1216,7 +1216,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def quality_graph_counts(
         self, user_id: str
-    ) -> MemoryQualityGraphCountsResult:
+    ) -> MemoryGraphCounts:
         """统计当前用户图谱节点和关系数量。"""
         cypher = """
         CALL {
@@ -1265,11 +1265,11 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         async with self._driver.session(database=self._database) as session:
             result = await session.run(cypher, user_id=user_id)
             rows = await result.data()
-        return MemoryQualityGraphCountsResult.model_validate(rows[0] if rows else {})
+        return MemoryGraphCounts.model_validate(rows[0] if rows else {})
 
     async def quality_issue_summary(
         self, user_id: str
-    ) -> MemoryQualityIssueSummaryResult:
+    ) -> MemoryQualityIssueSummary:
         """统计当前用户图谱质量问题摘要。"""
         cypher = """
         CALL {
@@ -1341,18 +1341,18 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         async with self._driver.session(database=self._database) as session:
             result = await session.run(cypher, user_id=user_id)
             rows = await result.data()
-        return MemoryQualityIssueSummaryResult.model_validate(rows[0] if rows else {})
+        return MemoryQualityIssueSummary.model_validate(rows[0] if rows else {})
 
     async def quality_issues(
         self, user_id: str, category: str, limit: int
-    ) -> MemoryQualityIssueListResult:
+    ) -> MemoryQualityIssueList:
         """读取当前用户指定质量问题类别样本。"""
         cypher = self._quality_issue_query(category)
         async with self._driver.session(database=self._database) as session:
             result = await session.run(cypher, user_id=user_id, limit=limit)
             rows = await result.data()
         items = [self._row_to_quality_issue(row) for row in rows]
-        return MemoryQualityIssueListResult(
+        return MemoryQualityIssueList(
             category=category,
             total=len(items),
             items=items,
@@ -1360,7 +1360,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
 
     async def merge_duplicate_entities(
         self, user_id: str
-    ) -> MemoryMergeDuplicatesResult:
+    ) -> MemoryDuplicateMergeStats:
         """合并当前用户历史同名同类型重复实体。"""
         async with self._driver.session(database=self._database) as session:
             return await session.execute_write(self._merge_duplicate_entities, user_id)
@@ -1475,7 +1475,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         fulltext_rows: list[dict[str, Any]],
         vector_rows: list[dict[str, Any]],
         top_k: int,
-    ) -> list[MemoryGraphResult]:
+    ) -> list[MemoryGraphSearchHit]:
         """融合全文和向量召回结果，按归一化加权分数排序。"""
         fulltext_results = [self._row_to_search_result(row) for row in fulltext_rows]
         vector_results = [self._row_to_search_result(row) for row in vector_rows]
@@ -1485,7 +1485,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         vector_scores = {result.entity_id: result.score for result in vector_results}
         fulltext_norm = self._normalize_scores(fulltext_scores)
         vector_norm = self._normalize_scores(vector_scores)
-        by_entity: dict[str, MemoryGraphResult] = {}
+        by_entity: dict[str, MemoryGraphSearchHit] = {}
         for result in [*fulltext_results, *vector_results]:
             existing = by_entity.get(result.entity_id)
             if not existing or result.score > existing.score:
@@ -1517,7 +1517,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         return {key: (value - low) / (high - low) for key, value in scores.items()}
 
     @staticmethod
-    async def _merge_duplicate_entities(tx, user_id: str) -> MemoryMergeDuplicatesResult:
+    async def _merge_duplicate_entities(tx, user_id: str) -> MemoryDuplicateMergeStats:
         """在单事务中合并同名同类型重复实体。"""
         group_result = await tx.run(
             """
@@ -1712,7 +1712,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             )
             removed_entities += len(duplicate_ids)
             merged_groups += 1
-        return MemoryMergeDuplicatesResult(
+        return MemoryDuplicateMergeStats(
             removed_entities=removed_entities,
             merged_groups=merged_groups,
         )
@@ -2025,7 +2025,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             )
 
     @staticmethod
-    def _row_to_search_result(row: dict[str, Any]) -> MemoryGraphResult:
+    def _row_to_search_result(row: dict[str, Any]) -> MemoryGraphSearchHit:
         """把 Neo4j 原始查询行转换为领域检索结果模型。"""
         entity = row.get("entity") or {}
         relations = [
@@ -2033,7 +2033,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             for relation in row.get("relations", [])
             if relation.get("neighbor_name")
         ]
-        return MemoryGraphResult(
+        return MemoryGraphSearchHit(
             entity_id=entity.get("id", ""),
             entity_name=entity.get("name", ""),
             entity_type=entity.get("type", ""),
@@ -2076,9 +2076,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_community_result(row: dict[str, Any]) -> CommunityResult:
+    def _row_to_community_result(row: dict[str, Any]) -> CommunitySummary:
         """把 Neo4j 行转换为社区列表项。"""
-        return CommunityResult(
+        return CommunitySummary(
             id=str(row.get("id") or ""),
             name=str(row.get("name") or ""),
             summary=str(row.get("summary") or ""),
@@ -2086,9 +2086,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_community_member(row: dict[str, Any]) -> CommunityMemberResult:
+    def _row_to_community_member(row: dict[str, Any]) -> CommunityMember:
         """把 Neo4j 行转换为社区成员。"""
-        return CommunityMemberResult(
+        return CommunityMember(
             entity_id=str(row.get("entity_id") or ""),
             entity_name=str(row.get("entity_name") or ""),
             entity_type=str(row.get("entity_type") or ""),
@@ -2101,9 +2101,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_community_relation(row: dict[str, Any]) -> CommunityRelationResult:
+    def _row_to_community_relation(row: dict[str, Any]) -> CommunityRelationFact:
         """把 Neo4j 行转换为社区内部关系。"""
-        return CommunityRelationResult(
+        return CommunityRelationFact(
             source_entity_id=str(row.get("source_entity_id") or ""),
             source_name=str(row.get("source_name") or ""),
             target_entity_id=str(row.get("target_entity_id") or ""),
@@ -2116,9 +2116,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_graph_node(row: dict[str, Any]) -> MemoryGraphNodeResult:
+    def _row_to_graph_node(row: dict[str, Any]) -> MemoryGraphNodeView:
         """把 Neo4j 行转换为图谱展示节点。"""
-        return MemoryGraphNodeResult(
+        return MemoryGraphNodeView(
             id=str(row.get("id") or ""),
             name=str(row.get("name") or ""),
             type=str(row.get("type") or ""),
@@ -2133,9 +2133,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_graph_edge(row: dict[str, Any]) -> MemoryGraphEdgeResult:
+    def _row_to_graph_edge(row: dict[str, Any]) -> MemoryGraphEdgeView:
         """把 Neo4j 行转换为图谱展示边。"""
-        return MemoryGraphEdgeResult(
+        return MemoryGraphEdgeView(
             source=str(row.get("source") or ""),
             target=str(row.get("target") or ""),
             predicate=str(row.get("predicate") or ""),
@@ -2146,9 +2146,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_profile_entity(row: dict[str, Any]) -> MemoryProfileEntityResult:
+    def _row_to_profile_entity(row: dict[str, Any]) -> MemoryProfileEntity:
         """把 Neo4j 行转换为画像实体。"""
-        return MemoryProfileEntityResult(
+        return MemoryProfileEntity(
             id=str(row.get("id") or ""),
             name=str(row.get("name") or ""),
             type=str(row.get("type") or ""),
@@ -2161,7 +2161,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
             core_facts=row.get("core_facts") or [],
             traits=row.get("traits") or [],
             relations=[
-                MemoryProfileRelationResult(
+                MemoryProfileRelation(
                     predicate=str(relation.get("predicate") or ""),
                     target_entity_id=relation.get("target_entity_id"),
                     target_name=relation.get("target_name"),
@@ -2177,9 +2177,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_relation_history(row: dict[str, Any]) -> MemoryRelationHistoryResult:
+    def _row_to_relation_history(row: dict[str, Any]) -> MemoryRelationHistoryItem:
         """把 Neo4j 行转换为关系历史项。"""
-        return MemoryRelationHistoryResult(
+        return MemoryRelationHistoryItem(
             relation_id=str(row.get("relation_id") or ""),
             direction=str(row.get("direction") or ""),
             neighbor_entity_id=str(row.get("neighbor_entity_id") or ""),
@@ -2193,9 +2193,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_quality_issue(row: dict[str, Any]) -> MemoryQualityIssueResult:
+    def _row_to_quality_issue(row: dict[str, Any]) -> MemoryQualityIssue:
         """把 Neo4j 行转换为质量审计问题项。"""
-        return MemoryQualityIssueResult(
+        return MemoryQualityIssue(
             category=str(row.get("category") or ""),
             severity=str(row.get("severity") or "info"),
             title=str(row.get("title") or ""),
@@ -2237,9 +2237,9 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_insight_result(row: dict[str, Any]) -> InsightResult:
+    def _row_to_insight_result(row: dict[str, Any]) -> InsightView:
         """把 Neo4j 洞察行转换为领域结果。"""
-        return InsightResult(
+        return InsightView(
             id=str(row.get("id") or ""),
             theme=str(row.get("theme") or ""),
             content=str(row.get("content") or ""),
@@ -2252,16 +2252,16 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_timeline_event(row: dict[str, Any]) -> MemoryTimelineEventResult:
+    def _row_to_timeline_event(row: dict[str, Any]) -> MemoryTimelineEvent:
         """把 Neo4j 事件行转换为时间线结果。"""
-        return MemoryTimelineEventResult(
+        return MemoryTimelineEvent(
             id=str(row.get("id") or ""),
             title=str(row.get("title") or ""),
             description=str(row.get("description") or ""),
             event_time=row.get("event_time"),
             created_at=row.get("created_at"),
             participants=[
-                MemoryTimelineParticipantResult(
+                MemoryTimelineParticipant(
                     entity_id=str(participant.get("entity_id") or ""),
                     name=str(participant.get("name") or ""),
                     type=str(participant.get("type") or ""),
@@ -2272,18 +2272,18 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
         )
 
     @staticmethod
-    def _row_to_memory_trace(row: dict[str, Any]) -> MemoryTraceResult:
+    def _row_to_memory_trace(row: dict[str, Any]) -> MemoryTrace:
         """把 Neo4j 聚合行转换为单条记忆图谱溯源。"""
         dialogue = row.get("dialogue") or {}
-        return MemoryTraceResult(
-            dialogue=MemoryTraceDialogueResult(
+        return MemoryTrace(
+            dialogue=MemoryTraceDialogue(
                 id=str(dialogue.get("id") or ""),
                 memory_id=str(dialogue.get("memory_id") or ""),
                 summary=dialogue.get("summary"),
                 created_at=dialogue.get("created_at"),
             ),
             chunks=[
-                MemoryTraceChunkResult(
+                MemoryTraceChunk(
                     id=str(chunk.get("id") or ""),
                     index=int(chunk.get("index") or 0),
                     text=str(chunk.get("text") or ""),
@@ -2292,7 +2292,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 if chunk.get("id")
             ],
             statements=[
-                MemoryTraceStatementResult(
+                MemoryTraceStatement(
                     id=str(statement.get("id") or ""),
                     chunk_id=str(statement.get("chunk_id") or ""),
                     index=int(statement.get("index") or 0),
@@ -2311,7 +2311,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 if statement.get("id")
             ],
             entities=[
-                MemoryTraceEntityResult(
+                MemoryTraceEntity(
                     id=str(entity.get("id") or ""),
                     name=str(entity.get("name") or ""),
                     type=str(entity.get("type") or ""),
@@ -2324,7 +2324,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 if entity.get("id")
             ],
             mentions=[
-                MemoryTraceMentionResult(
+                MemoryTraceMention(
                     id=str(mention.get("id") or ""),
                     statement_id=str(mention.get("statement_id") or ""),
                     entity_id=str(mention.get("entity_id") or ""),
@@ -2333,7 +2333,7 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 if mention.get("id")
             ],
             relations=[
-                MemoryTraceRelationResult(
+                MemoryTraceRelation(
                     id=str(relation.get("id") or ""),
                     source_entity_id=str(relation.get("source_entity_id") or ""),
                     source_name=str(relation.get("source_name") or ""),
@@ -2350,14 +2350,14 @@ class Neo4jMemoryGraphRepository(MemoryGraphRepository):
                 if relation.get("id")
             ],
             events=[
-                MemoryTraceEventResult(
+                MemoryTraceEvent(
                     id=str(event.get("id") or ""),
                     title=str(event.get("title") or ""),
                     description=str(event.get("description") or ""),
                     event_time=event.get("event_time"),
                     created_at=event.get("created_at"),
                     participants=[
-                        MemoryTimelineParticipantResult(
+                        MemoryTimelineParticipant(
                             entity_id=str(participant.get("entity_id") or ""),
                             name=str(participant.get("name") or ""),
                             type=str(participant.get("type") or ""),

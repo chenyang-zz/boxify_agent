@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.domain.models.memory_graph import (
     LongTermMemoryGraphData,
     MemoryGraphStats,
-    MemoryTraceResult,
+    MemoryTrace,
 )
 
 
@@ -72,14 +72,14 @@ class LongTermMemory(BaseModel):
         self.error_msg = error_msg[:500]
 
 
-class MemoryDetailResult(LongTermMemory):
+class LongTermMemoryDetail(LongTermMemory):
     """单条长期记忆详情，包含 PG 记录和可选图谱溯源。"""
 
     graph_available: bool = True
-    trace: MemoryTraceResult | None = None
+    trace: MemoryTrace | None = None
 
 
-class MemoryReextractItemResult(BaseModel):
+class MemoryReextractItem(BaseModel):
     """单条重萃取候选记忆的派发结果。"""
 
     memory_id: str
@@ -89,12 +89,12 @@ class MemoryReextractItemResult(BaseModel):
     error: str | None = None
 
 
-class MemoryReextractResult(BaseModel):
+class MemoryReextractBatch(BaseModel):
     """一次记忆重萃取请求的统计结果。"""
 
     matched: int = 0
     dispatched: int = 0
     skipped: int = 0
     dry_run: bool = False
-    items: list[MemoryReextractItemResult] = Field(default_factory=list)
+    items: list[MemoryReextractItem] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

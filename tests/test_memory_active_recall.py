@@ -2,11 +2,11 @@ import pytest
 
 from app.domain.models.memory_graph import (
     GraphRelationFact,
-    InsightResult,
-    MemoryActiveRecallCommunityResult,
-    MemoryActiveRecallEventResult,
-    MemoryGraphResult,
-    MemoryTimelineParticipantResult,
+    InsightView,
+    MemoryActiveRecallCommunityHit,
+    MemoryActiveRecallEventHit,
+    MemoryGraphSearchHit,
+    MemoryTimelineParticipant,
 )
 from app.domain.services.memory.active_recall import MemoryActiveRecall
 
@@ -93,7 +93,7 @@ class FakeRecallGraphRepository:
         assert top_k == 3
         FakeRecallGraphRepository.last_query_embedding = query_embedding
         return [
-            InsightResult(
+            InsightView(
                 id="insight-1",
                 theme="音乐偏好",
                 content="用户偏好华语流行音乐。",
@@ -107,7 +107,7 @@ class FakeRecallGraphRepository:
         assert top_k == 3
         assert query_embedding == [0.7]
         return [
-            MemoryGraphResult(
+            MemoryGraphSearchHit(
                 entity_id="entity-1",
                 entity_name="周杰伦",
                 entity_type="生命体",
@@ -131,7 +131,7 @@ class FakeRecallGraphRepository:
         assert top_k == 2
         self.community_calls += 1
         return [
-            MemoryActiveRecallCommunityResult(
+            MemoryActiveRecallCommunityHit(
                 id="community-1",
                 name="音乐偏好",
                 summary="用户经常提到华语流行与演唱会安排。",
@@ -147,17 +147,17 @@ class FakeRecallGraphRepository:
         assert top_k == 2
         self.event_calls += 1
         return [
-            MemoryActiveRecallEventResult(
+            MemoryActiveRecallEventHit(
                 id="event-1",
                 title="周杰伦演唱会",
                 event_time="2026-06-01T20:00:00",
                 participants=[
-                    MemoryTimelineParticipantResult(
+                    MemoryTimelineParticipant(
                         entity_id="entity-user",
                         name="用户",
                         type="生命体",
                     ),
-                    MemoryTimelineParticipantResult(
+                    MemoryTimelineParticipant(
                         entity_id="entity-jay",
                         name="周杰伦",
                         type="生命体",
@@ -171,7 +171,7 @@ class FakeRecallGraphRepository:
 class PartiallyExplodingRecallGraphRepository(FakeRecallGraphRepository):
     async def search_insights_by_vector(self, user_id, query_embedding, top_k):
         return [
-            InsightResult(
+            InsightView(
                 id="insight-1",
                 theme="音乐偏好",
                 content="用户偏好华语流行音乐。",

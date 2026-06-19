@@ -234,14 +234,14 @@ class MemoryCommunityClusterStats(BaseModel):
     error: str | None = None
 
 
-class MemoryMergeDuplicatesResult(BaseModel):
+class MemoryDuplicateMergeStats(BaseModel):
     """历史重复实体合并统计。"""
 
     removed_entities: int = 0
     merged_groups: int = 0
 
 
-class MemoryQualityGraphCountsResult(BaseModel):
+class MemoryGraphCounts(BaseModel):
     """当前用户记忆图谱节点和关系数量统计。"""
 
     dialogues: int = 0
@@ -255,7 +255,7 @@ class MemoryQualityGraphCountsResult(BaseModel):
     insights: int = 0
 
 
-class MemoryQualityIssueSummaryResult(BaseModel):
+class MemoryQualityIssueSummary(BaseModel):
     """当前用户记忆质量问题摘要统计。"""
 
     duplicate_entities: int = 0
@@ -268,7 +268,7 @@ class MemoryQualityIssueSummaryResult(BaseModel):
     orphan_insights: int = 0
 
 
-class MemoryQualityFailedMemoryResult(BaseModel):
+class FailedMemorySnapshot(BaseModel):
     """最近失败 PG 记忆摘要。"""
 
     id: str
@@ -277,7 +277,7 @@ class MemoryQualityFailedMemoryResult(BaseModel):
     updated_at: datetime | None = None
 
 
-class MemoryQualityIssueResult(BaseModel):
+class MemoryQualityIssue(BaseModel):
     """单条记忆质量问题样本。"""
 
     category: str
@@ -289,27 +289,27 @@ class MemoryQualityIssueResult(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class MemoryQualityIssueListResult(BaseModel):
+class MemoryQualityIssueList(BaseModel):
     """指定类别质量问题样本列表。"""
 
     category: str
     total: int = 0
-    items: list[MemoryQualityIssueResult] = Field(default_factory=list)
+    items: list[MemoryQualityIssue] = Field(default_factory=list)
 
 
-class MemoryQualityOverviewResult(BaseModel):
+class MemoryQualityOverview(BaseModel):
     """当前用户记忆质量审计总览。"""
 
     generated_at: datetime = Field(default_factory=datetime.now)
     pg_total: int = 0
     pg_status_counts: dict[str, int] = Field(default_factory=dict)
-    recent_failed: list[MemoryQualityFailedMemoryResult] = Field(default_factory=list)
+    recent_failed: list[FailedMemorySnapshot] = Field(default_factory=list)
     graph_available: bool = True
-    graph_counts: MemoryQualityGraphCountsResult = Field(
-        default_factory=MemoryQualityGraphCountsResult
+    graph_counts: MemoryGraphCounts = Field(
+        default_factory=MemoryGraphCounts
     )
-    issue_summary: MemoryQualityIssueSummaryResult = Field(
-        default_factory=MemoryQualityIssueSummaryResult
+    issue_summary: MemoryQualityIssueSummary = Field(
+        default_factory=MemoryQualityIssueSummary
     )
 
 
@@ -332,7 +332,7 @@ class MemoryEntityDedupCandidate(BaseModel):
     name_contains: bool = False
 
 
-class MemoryEntityDedupResult(BaseModel):
+class MemoryEntityDeduplication(BaseModel):
     """实体消歧后的实体映射和 ID 重定向信息。"""
 
     entities: list[EntityNode] = Field(default_factory=list)
@@ -355,7 +355,7 @@ class InsightNode(BaseModel):
     updated_at: datetime | None = None
 
 
-class InsightResult(BaseModel):
+class InsightView(BaseModel):
     """主动召回返回的洞察命中。"""
 
     id: str
@@ -369,7 +369,7 @@ class InsightResult(BaseModel):
     updated_at: datetime | None = None
 
 
-class CommunityResult(BaseModel):
+class CommunitySummary(BaseModel):
     """社区列表返回项。"""
 
     id: str
@@ -378,13 +378,13 @@ class CommunityResult(BaseModel):
     member_count: int = 0
 
 
-class MemoryActiveRecallCommunityResult(CommunityResult):
+class MemoryActiveRecallCommunityHit(CommunitySummary):
     """主动召回命中的主题社区。"""
 
     score: float = 0
 
 
-class CommunityMemberResult(BaseModel):
+class CommunityMember(BaseModel):
     """社区成员实体返回项。"""
 
     entity_id: str
@@ -398,7 +398,7 @@ class CommunityMemberResult(BaseModel):
     access_count: int = 0
 
 
-class CommunityRelationResult(BaseModel):
+class CommunityRelationFact(BaseModel):
     """社区内部关系事实返回项。"""
 
     source_entity_id: str
@@ -412,7 +412,7 @@ class CommunityRelationResult(BaseModel):
     is_current: bool = True
 
 
-class MemoryTimelineParticipantResult(BaseModel):
+class MemoryTimelineParticipant(BaseModel):
     """时间线事件参与实体。"""
 
     entity_id: str
@@ -420,7 +420,7 @@ class MemoryTimelineParticipantResult(BaseModel):
     type: str
 
 
-class MemoryTimelineEventResult(BaseModel):
+class MemoryTimelineEvent(BaseModel):
     """用户记忆事件时间线项。"""
 
     id: str
@@ -428,16 +428,16 @@ class MemoryTimelineEventResult(BaseModel):
     description: str = ""
     event_time: datetime | None = None
     created_at: datetime | None = None
-    participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
+    participants: list[MemoryTimelineParticipant] = Field(default_factory=list)
 
 
-class MemoryActiveRecallEventResult(MemoryTimelineEventResult):
+class MemoryActiveRecallEventHit(MemoryTimelineEvent):
     """主动召回命中的经历事件。"""
 
     score: float = 0
 
 
-class MemoryTraceDialogueResult(BaseModel):
+class MemoryTraceDialogue(BaseModel):
     """单条记忆图谱溯源中的 Dialogue 节点。"""
 
     id: str
@@ -446,7 +446,7 @@ class MemoryTraceDialogueResult(BaseModel):
     created_at: datetime | None = None
 
 
-class MemoryTraceChunkResult(BaseModel):
+class MemoryTraceChunk(BaseModel):
     """单条记忆图谱溯源中的 Chunk 节点。"""
 
     id: str
@@ -454,7 +454,7 @@ class MemoryTraceChunkResult(BaseModel):
     text: str = ""
 
 
-class MemoryTraceStatementResult(BaseModel):
+class MemoryTraceStatement(BaseModel):
     """单条记忆图谱溯源中的 Statement 节点。"""
 
     id: str
@@ -470,7 +470,7 @@ class MemoryTraceStatementResult(BaseModel):
     memory_layer: str = "short_term"
 
 
-class MemoryTraceEntityResult(BaseModel):
+class MemoryTraceEntity(BaseModel):
     """单条记忆图谱溯源中的 Entity 节点。"""
 
     id: str
@@ -482,7 +482,7 @@ class MemoryTraceEntityResult(BaseModel):
     memory_layer: str = "short_term"
 
 
-class MemoryTraceMentionResult(BaseModel):
+class MemoryTraceMention(BaseModel):
     """单条记忆图谱溯源中的 MENTIONS 边。"""
 
     id: str
@@ -490,7 +490,7 @@ class MemoryTraceMentionResult(BaseModel):
     entity_id: str
 
 
-class MemoryTraceRelationResult(BaseModel):
+class MemoryTraceRelation(BaseModel):
     """单条记忆图谱溯源中的 RELATION 边。"""
 
     id: str
@@ -506,7 +506,7 @@ class MemoryTraceRelationResult(BaseModel):
     is_current: bool = True
 
 
-class MemoryTraceEventResult(BaseModel):
+class MemoryTraceEvent(BaseModel):
     """单条记忆图谱溯源中的 Event 节点。"""
 
     id: str
@@ -514,22 +514,22 @@ class MemoryTraceEventResult(BaseModel):
     description: str = ""
     event_time: datetime | None = None
     created_at: datetime | None = None
-    participants: list[MemoryTimelineParticipantResult] = Field(default_factory=list)
+    participants: list[MemoryTimelineParticipant] = Field(default_factory=list)
 
 
-class MemoryTraceResult(BaseModel):
+class MemoryTrace(BaseModel):
     """单条长期记忆对应的完整图谱溯源。"""
 
-    dialogue: MemoryTraceDialogueResult
-    chunks: list[MemoryTraceChunkResult] = Field(default_factory=list)
-    statements: list[MemoryTraceStatementResult] = Field(default_factory=list)
-    entities: list[MemoryTraceEntityResult] = Field(default_factory=list)
-    mentions: list[MemoryTraceMentionResult] = Field(default_factory=list)
-    relations: list[MemoryTraceRelationResult] = Field(default_factory=list)
-    events: list[MemoryTraceEventResult] = Field(default_factory=list)
+    dialogue: MemoryTraceDialogue
+    chunks: list[MemoryTraceChunk] = Field(default_factory=list)
+    statements: list[MemoryTraceStatement] = Field(default_factory=list)
+    entities: list[MemoryTraceEntity] = Field(default_factory=list)
+    mentions: list[MemoryTraceMention] = Field(default_factory=list)
+    relations: list[MemoryTraceRelation] = Field(default_factory=list)
+    events: list[MemoryTraceEvent] = Field(default_factory=list)
 
 
-class MemoryGraphNodeResult(BaseModel):
+class MemoryGraphNodeView(BaseModel):
     """记忆图谱可视化实体节点。"""
 
     id: str
@@ -545,7 +545,7 @@ class MemoryGraphNodeResult(BaseModel):
     traits: list[str] = Field(default_factory=list)
 
 
-class MemoryGraphEdgeResult(BaseModel):
+class MemoryGraphEdgeView(BaseModel):
     """记忆图谱可视化实体关系边。"""
 
     source: str
@@ -557,23 +557,23 @@ class MemoryGraphEdgeResult(BaseModel):
     is_current: bool = True
 
 
-class MemoryGraphViewResult(BaseModel):
+class MemoryGraphView(BaseModel):
     """当前用户完整实体关系图。"""
 
-    nodes: list[MemoryGraphNodeResult] = Field(default_factory=list)
-    edges: list[MemoryGraphEdgeResult] = Field(default_factory=list)
-    communities: list[CommunityResult] = Field(default_factory=list)
+    nodes: list[MemoryGraphNodeView] = Field(default_factory=list)
+    edges: list[MemoryGraphEdgeView] = Field(default_factory=list)
+    communities: list[CommunitySummary] = Field(default_factory=list)
 
 
-class MemoryEntitySubgraphResult(BaseModel):
+class MemoryEntitySubgraphView(BaseModel):
     """单实体一跳子图。"""
 
     center: str
-    nodes: list[MemoryGraphNodeResult] = Field(default_factory=list)
-    edges: list[MemoryGraphEdgeResult] = Field(default_factory=list)
+    nodes: list[MemoryGraphNodeView] = Field(default_factory=list)
+    edges: list[MemoryGraphEdgeView] = Field(default_factory=list)
 
 
-class MemoryProfileRelationResult(BaseModel):
+class MemoryProfileRelation(BaseModel):
     """用户画像实体的一跳出边关系事实。"""
 
     predicate: str
@@ -586,7 +586,7 @@ class MemoryProfileRelationResult(BaseModel):
     is_current: bool = True
 
 
-class MemoryRelationHistoryResult(BaseModel):
+class MemoryRelationHistoryItem(BaseModel):
     """单个实体的一跳关系历史事实。"""
 
     relation_id: str
@@ -601,7 +601,7 @@ class MemoryRelationHistoryResult(BaseModel):
     is_current: bool = True
 
 
-class MemoryProfileEntityResult(BaseModel):
+class MemoryProfileEntity(BaseModel):
     """用户画像实体。"""
 
     id: str
@@ -615,22 +615,22 @@ class MemoryProfileEntityResult(BaseModel):
     mention_count: int = 0
     core_facts: list[str] = Field(default_factory=list)
     traits: list[str] = Field(default_factory=list)
-    relations: list[MemoryProfileRelationResult] = Field(default_factory=list)
+    relations: list[MemoryProfileRelation] = Field(default_factory=list)
 
 
-class MemoryProfileGroupResult(BaseModel):
+class MemoryProfileGroup(BaseModel):
     """按类型聚合的一组画像实体。"""
 
     type: str
-    entities: list[MemoryProfileEntityResult] = Field(default_factory=list)
+    entities: list[MemoryProfileEntity] = Field(default_factory=list)
 
 
-class MemoryProfileResult(BaseModel):
+class MemoryProfile(BaseModel):
     """当前用户记忆画像视图。"""
 
     total: int = 0
     type_counts: dict[str, int] = Field(default_factory=dict)
-    groups: list[MemoryProfileGroupResult] = Field(default_factory=list)
+    groups: list[MemoryProfileGroup] = Field(default_factory=list)
 
 
 class GraphRelationFact(BaseModel):
@@ -646,7 +646,7 @@ class GraphRelationFact(BaseModel):
     is_current: bool = True
 
 
-class MemoryGraphResult(BaseModel):
+class MemoryGraphSearchHit(BaseModel):
     """图谱检索返回给长期记忆管理器的结果。"""
 
     entity_id: str
@@ -684,7 +684,7 @@ class LongTermMemoryGraphData(BaseModel):
     relations: list[GraphRelationFact] = Field(default_factory=list)
 
     @classmethod
-    def from_result(cls, result: MemoryGraphResult) -> "LongTermMemoryGraphData":
+    def from_search_hit(cls, result: MemoryGraphSearchHit) -> "LongTermMemoryGraphData":
         """从图谱仓储检索结果构造长期记忆附加数据。"""
         return cls(
             entity_id=result.entity_id,

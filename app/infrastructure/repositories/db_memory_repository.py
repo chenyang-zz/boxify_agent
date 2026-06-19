@@ -2,7 +2,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models.long_term_memory import LongTermMemory, MemoryStatus
-from app.domain.models.memory_graph import MemoryQualityFailedMemoryResult
+from app.domain.models.memory_graph import FailedMemorySnapshot
 from app.domain.repositories.memory_repository import MemoryRepository
 from app.infrastructure.models.memory import MemoryModel
 
@@ -101,7 +101,7 @@ class DBMemoryRepository(MemoryRepository):
 
     async def recent_failed(
         self, user_id: str, limit: int
-    ) -> list[MemoryQualityFailedMemoryResult]:
+    ) -> list[FailedMemorySnapshot]:
         """读取当前用户最近失败的记忆摘要。"""
         stmt = (
             select(MemoryModel)
@@ -114,7 +114,7 @@ class DBMemoryRepository(MemoryRepository):
         )
         records = (await self.db_session.execute(stmt)).scalars().all()
         return [
-            MemoryQualityFailedMemoryResult(
+            FailedMemorySnapshot(
                 id=record.id,
                 content=record.content[:200],
                 error_msg=record.error_msg,
