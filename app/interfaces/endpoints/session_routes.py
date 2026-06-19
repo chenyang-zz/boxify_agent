@@ -70,6 +70,8 @@ def to_list_session_item(session) -> ListSessionItem:
         "type": session_type,
         "project_id": session.project_id,
         "is_pinned": session.is_pinned,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
     }
     if session_type != SessionType.CHAT:
         data["unread_message_count"] = session.unread_message_count
@@ -83,6 +85,34 @@ def to_project_response(project) -> SessionProjectResponse:
         name=project.name,
         sort_order=project.sort_order,
         is_pinned=project.is_pinned,
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+    )
+
+
+def to_sidebar_response(projects, sessions) -> SessionSidebarResponse:
+    """将项目和会话领域对象组装为侧边栏响应结构。"""
+    sessions_by_project = {project.id: [] for project in projects}
+    standalone = []
+    for session in sessions:
+        if session.project_id and session.project_id in sessions_by_project:
+            sessions_by_project[session.project_id].append(session)
+        else:
+            standalone.append(session)
+    return SessionSidebarResponse(
+        projects=[
+            SidebarProjectItem(
+                **to_project_response(project).model_dump(),
+                sessions=[
+                    to_list_session_item(session)
+                    for session in sessions_by_project[project.id]
+                ],
+            )
+            for project in projects
+        ],
+        standalone_conversations=[
+            to_list_session_item(session) for session in standalone
+        ],
     )
 
 
@@ -143,22 +173,11 @@ async def get_sidebar(
     session_service: SessionService = Depends(get_session_service),
 ):
     """获取侧边栏组合结构"""
-    sidebar = await session_service.get_sidebar()
+    projects = await session_service.get_sidebar_projects()
+    sessions = await session_service.get_sidebar_sessions()
     return Response.success(
         msg="获取侧边栏会话列表成功",
-        data=SessionSidebarResponse(
-            projects=[
-                SidebarProjectItem(
-                    **to_project_response(item.project).model_dump(),
-                    sessions=[to_list_session_item(session) for session in item.sessions],
-                )
-                for item in sidebar.projects
-            ],
-            standalone_conversations=[
-                to_list_session_item(session)
-                for session in sidebar.standalone_conversations
-            ],
-        ),
+        data=to_sidebar_response(projects, sessions),
     )
 
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -72,6 +73,8 @@ def test_sidebar_returns_projects_with_sessions_and_independent_conversations():
         "name": "claude_code_src",
         "sort_order": 10,
         "is_pinned": False,
+        "created_at": "2026-01-01T09:00:00",
+        "updated_at": "2026-01-01T10:00:00",
     }
     assert sidebar_response.status_code == 200
     assert sidebar_response.json()["data"] == {
@@ -81,6 +84,8 @@ def test_sidebar_returns_projects_with_sessions_and_independent_conversations():
                 "name": "claude_code_src",
                 "sort_order": 10,
                 "is_pinned": True,
+                "created_at": "2026-01-01T09:00:00",
+                "updated_at": "2026-01-01T10:00:00",
                 "sessions": [
                     {
                         "session_id": "session-in-project",
@@ -91,6 +96,8 @@ def test_sidebar_returns_projects_with_sessions_and_independent_conversations():
                         "type": "chat",
                         "project_id": "project-1",
                         "is_pinned": True,
+                        "created_at": "2026-01-01T09:00:00",
+                        "updated_at": "2026-01-01T10:00:00",
                     }
                 ],
             }
@@ -105,6 +112,8 @@ def test_sidebar_returns_projects_with_sessions_and_independent_conversations():
                 "type": "chat",
                 "project_id": None,
                 "is_pinned": False,
+                "created_at": "2026-01-01T09:00:00",
+                "updated_at": "2026-01-01T10:00:00",
             }
         ],
     }
@@ -150,15 +159,11 @@ async def test_session_service_sidebar_only_includes_chat_sessions():
         user_id="user-a",
     )
 
-    sidebar = await service.get_sidebar()
+    projects = await service.get_sidebar_projects()
+    sessions = await service.get_sidebar_sessions()
 
-    assert [item.project.id for item in sidebar.projects] == ["project-1"]
-    assert [session.id for session in sidebar.projects[0].sessions] == [
-        "chat-in-project"
-    ]
-    assert [session.id for session in sidebar.standalone_conversations] == [
-        "chat-standalone"
-    ]
+    assert [project.id for project in projects] == ["project-1"]
+    assert [session.id for session in sessions] == ["chat-in-project", "chat-standalone"]
 
 
 def test_move_session_and_delete_project_updates_sidebar_structure():
@@ -298,6 +303,8 @@ class FakeSessionService:
             name=name,
             sort_order=sort_order,
             is_pinned=is_pinned,
+            created_at=datetime(2026, 1, 1, 9, 0, 0),
+            updated_at=datetime(2026, 1, 1, 10, 0, 0),
         )
 
     async def update_project(
@@ -309,36 +316,36 @@ class FakeSessionService:
             name=name or "Pinned",
             sort_order=sort_order or 0,
             is_pinned=bool(is_pinned),
+            created_at=datetime(2026, 1, 1, 9, 0, 0),
+            updated_at=datetime(2026, 1, 1, 10, 0, 0),
         )
 
-    async def get_sidebar(self):
-        return SimpleNamespace(
-            projects=[
-                SimpleNamespace(
-                    project=SimpleNamespace(
-                        id="project-1",
-                        name="claude_code_src",
-                        sort_order=10,
-                        is_pinned=True,
-                    ),
-                    sessions=[
-                        _session(
-                            "session-in-project",
-                            title="项目会话",
-                            latest_message="hello",
-                            project_id="project-1",
-                            is_pinned=True,
-                        )
-                    ],
-                )
-            ],
-            standalone_conversations=[
-                _session(
-                    "session-standalone",
-                    title="独立会话",
-                )
-            ],
-        )
+    async def get_sidebar_projects(self):
+        return [
+            SimpleNamespace(
+                id="project-1",
+                name="claude_code_src",
+                sort_order=10,
+                is_pinned=True,
+                created_at=datetime(2026, 1, 1, 9, 0, 0),
+                updated_at=datetime(2026, 1, 1, 10, 0, 0),
+            )
+        ]
+
+    async def get_sidebar_sessions(self):
+        return [
+            _session(
+                "session-in-project",
+                title="项目会话",
+                latest_message="hello",
+                project_id="project-1",
+                is_pinned=True,
+            ),
+            _session(
+                "session-standalone",
+                title="独立会话",
+            ),
+        ]
 
     async def update_session(
         self, session_id, title=None, project_id=None, is_pinned=None
@@ -423,6 +430,8 @@ def _session(
         type=session_type,
         project_id=project_id,
         is_pinned=is_pinned,
+        created_at=datetime(2026, 1, 1, 9, 0, 0),
+        updated_at=datetime(2026, 1, 1, 10, 0, 0),
     )
 
 

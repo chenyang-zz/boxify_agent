@@ -45,6 +45,8 @@ class ListSessionItem(BaseModel):
     type: SessionType = SessionType.CHAT
     project_id: str | None = None
     is_pinned: bool = False
+    created_at: datetime
+    updated_at: datetime
 
 
 class ListSessionResponse(BaseModel):
@@ -76,6 +78,8 @@ class SessionProjectResponse(BaseModel):
     name: str
     sort_order: int
     is_pinned: bool = False
+    created_at: datetime
+    updated_at: datetime
 
 
 class SidebarProjectItem(SessionProjectResponse):

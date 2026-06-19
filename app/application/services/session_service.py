@@ -9,10 +9,6 @@
 import logging
 from typing import Callable, Dict, List, Optional, Type
 
-from app.application.models.session_sidebar import (
-    SessionSidebarView,
-    SidebarProjectView,
-)
 from app.application.errors.exceptions import BadRequestError, NotFoundError, ServerRequestsError
 from app.domain.external.sandbox import Sandbox
 from app.domain.models.file import File
@@ -124,12 +120,16 @@ class SessionService:
             await uow.session.delete_by_project(project_id, self._user_id)
             await uow.session_project.delete_by_id_for_user(project_id, self._user_id)
 
-    async def get_sidebar(self) -> SessionSidebarView:
-        """返回侧边栏组合结构。"""
+    async def get_sidebar_projects(self) -> List[SessionProject]:
+        """获取当前用户侧边栏项目列表。"""
         async with self._uow_factory() as uow:
-            projects = await uow.session_project.list_by_user(self._user_id)
+            return await uow.session_project.list_by_user(self._user_id)
+
+    async def get_sidebar_sessions(self) -> List[Session]:
+        """获取当前用户侧边栏会话列表，仅包含普通聊天会话。"""
+        async with self._uow_factory() as uow:
             sessions = await uow.session.get_all_by_user(self._user_id)
-        sessions = [
+        return [
             session
             for session in sessions
             if (
@@ -139,25 +139,6 @@ class SessionService:
             )
             == SessionType.CHAT
         ]
-        sessions_by_project: dict[str, list[Session]] = {
-            project.id: [] for project in projects
-        }
-        standalone: list[Session] = []
-        for session in sessions:
-            if session.project_id and session.project_id in sessions_by_project:
-                sessions_by_project[session.project_id].append(session)
-            else:
-                standalone.append(session)
-        return SessionSidebarView(
-            projects=[
-                SidebarProjectView(
-                    project=project,
-                    sessions=sessions_by_project[project.id],
-                )
-                for project in projects
-            ],
-            standalone_conversations=standalone,
-        )
 
     async def update_session(
         self,
