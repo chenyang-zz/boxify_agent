@@ -1,4 +1,7 @@
-from typing import Any, Dict, List, Protocol
+from typing import Any, AsyncIterator, Dict, List, Protocol
+
+LLMMessage = Dict[str, Any]
+LLMTextStream = AsyncIterator[str]
 
 
 class LLM(Protocol):
@@ -10,8 +13,15 @@ class LLM(Protocol):
         tools: List[Dict[str, Any]] | None = None,
         response_format: Dict[str, Any] | None = None,
         tool_choice: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> LLMMessage:
         """传递消息列表、工具列表、响应格式，工具选择策略调用LLM接口"""
+        ...
+
+    def stream(
+        self,
+        messages: List[Dict[str, Any]],
+    ) -> LLMTextStream:
+        """以纯文本片段流式调用LLM接口"""
         ...
 
     @property

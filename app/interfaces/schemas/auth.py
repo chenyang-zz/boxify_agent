@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -13,8 +15,13 @@ class UserResponse(BaseModel):
 
     id: str
     username: str
+    email: str | None = None
+    avatar_url: str | None = None
+    oauth_provider: str | None = None
     is_active: bool
     is_admin: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class LoginResponse(BaseModel):

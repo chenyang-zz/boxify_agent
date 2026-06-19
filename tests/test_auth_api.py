@@ -43,6 +43,38 @@ def test_login_returns_bearer_token_and_current_user():
     app.dependency_overrides.clear()
 
 
+def test_me_returns_profile_fields_for_current_user():
+    repository = InMemoryUserRepository()
+    auth_service = AuthService(
+        uow_factory=lambda: InMemoryUnitOfWork(repository), secret_key="secret"
+    )
+    user = repository.seed_user("admin", "admin-password")
+    user.email = "admin@example.com"
+    user.avatar_url = "https://example.com/admin.png"
+    user.oauth_provider = "google"
+    app.dependency_overrides[get_auth_service] = lambda: auth_service
+    client = TestClient(app)
+    token = auth_service.create_access_token(user)
+
+    response = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["id"] == user.id
+    assert data["username"] == "admin"
+    assert data["email"] == "admin@example.com"
+    assert data["avatar_url"] == "https://example.com/admin.png"
+    assert data["oauth_provider"] == "google"
+    assert data["created_at"]
+    assert data["updated_at"]
+    assert "password" not in str(data).lower()
+    assert "oauth_subject" not in data
+    app.dependency_overrides.clear()
+
+
 def test_login_rejects_invalid_credentials_with_uniform_401_response():
     auth_service = AuthService(
         uow_factory=lambda: InMemoryUnitOfWork(InMemoryUserRepository()),

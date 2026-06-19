@@ -253,6 +253,39 @@ async def test_chat_service_persists_user_and_assistant_messages():
     ]
 
 
+@pytest.mark.anyio
+async def test_chat_service_streams_chunks_but_persists_complete_assistant_message():
+    session_repository = InMemorySessionRepository()
+    session = Session(
+        id="chat-1",
+        title="普通聊天",
+        status=SessionStatus.PENDING,
+        type=SessionType.CHAT,
+        user_id="user-a",
+    )
+    session_repository.sessions[session.id] = session
+    uow_factory = TrackingUowFactory(session_repository=session_repository)
+    llm = StreamingFakeLLM(chunks=["he", "llo"])
+    service = ChatService(uow_factory=uow_factory, llm=llm, user_id="user-a")
+
+    events = [event async for event in service.chat(session.id, message="hello")]
+
+    assert [event.message for event in events if isinstance(event, MessageEvent)] == [
+        "he",
+        "llo",
+    ]
+    assert isinstance(events[-1], DoneEvent)
+    assert llm.stream_calls == [[{"role": "user", "content": "hello"}]]
+    added_events = [
+        event for uow in uow_factory.created_uows for _, event in uow.session.added_events
+    ]
+    persisted_messages = [
+        event.message for event in added_events if isinstance(event, MessageEvent)
+    ]
+    assert persisted_messages == ["hello", "hello"]
+    assert sum(isinstance(event, DoneEvent) for event in added_events) == 1
+
+
 class FakeDBSession:
     def __init__(self, commit_error=None, rollback_error=None):
         self.commit_error = commit_error
@@ -435,3 +468,21 @@ class FakeLLM:
     async def invoke(self, messages, tools=None, response_format=None, tool_choice=None):
         self.messages.append(messages)
         return {"role": "assistant", "content": self.content}
+
+    async def stream(self, messages):
+        self.messages.append(messages)
+        yield self.content
+
+
+class StreamingFakeLLM:
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.stream_calls = []
+
+    async def invoke(self, messages, tools=None, response_format=None, tool_choice=None):
+        return {"role": "assistant", "content": "".join(self.chunks)}
+
+    async def stream(self, messages):
+        self.stream_calls.append(messages)
+        for chunk in self.chunks:
+            yield chunk

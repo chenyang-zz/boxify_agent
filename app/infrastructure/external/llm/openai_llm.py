@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, cast
+from typing import Any, AsyncIterator, Dict, List, cast
 
 from openai import AsyncOpenAI, Omit
 from openai.types.chat import (
@@ -10,7 +10,7 @@ from openai.types.chat import (
 from openai.types.chat.completion_create_params import ResponseFormat
 
 from app.application.errors.exceptions import ServerRequestsError
-from app.domain.external.llm import LLM
+from app.domain.external.llm import LLM, LLMMessage, LLMTextStream
 from app.domain.models.app_config import LLMConfig
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,8 @@ class OpenAILLM(LLM):
         tools: List[Dict[str, Any]] | None = None,
         response_format: Dict[str, Any] | None = None,
         tool_choice: str | None = None,
-    ) -> Dict[str, Any]:
-        """使用异步OpenAI客户端发起块响应（该步骤可以切换成流式响应）"""
+    ) -> LLMMessage:
+        """使用异步OpenAI客户端发起完整响应请求。"""
 
         openai_messages = cast(list[ChatCompletionMessageParam], messages)
         openai_tools = cast(list[ChatCompletionFunctionToolParam] | Omit, tools)
@@ -96,9 +96,50 @@ class OpenAILLM(LLM):
             # 3.处理响应数据并返回
             logger.info(f"OpenAI客户端返回内容: {response.model_dump()}")
             return response.choices[0].message.model_dump()
+        except ServerRequestsError:
+            raise
         except Exception as e:
             logger.info(f"调用OpenAI客户端发生错误: {str(e)}")
             raise ServerRequestsError("调用OpenAI客户端向LLM发起请求出错")
+
+    async def stream(self, messages: List[Dict[str, Any]]) -> LLMTextStream:
+        """使用异步OpenAI客户端发起纯文本流式响应请求。"""
+        openai_messages = cast(list[ChatCompletionMessageParam], messages)
+        try:
+            logger.info(f"调用OpenAI客户端向LLM发起流式请求: {self._model_name}")
+            response_stream = await self._client.chat.completions.create(
+                model=self._model_name,
+                temperature=self._temperature,
+                max_tokens=self._max_tokens,
+                messages=openai_messages,
+                stream=True,
+                timeout=self._timeout,
+            )
+            async for chunk in self._iter_text_chunks(
+                cast(AsyncIterator[Any], response_stream)
+            ):
+                yield chunk
+        except ServerRequestsError:
+            raise
+        except Exception as e:
+            logger.info(f"调用OpenAI客户端发生流式响应错误: {str(e)}")
+            raise ServerRequestsError("调用OpenAI客户端向LLM发起请求出错") from e
+
+    async def _iter_text_chunks(
+        self, response_stream: AsyncIterator[Any]
+    ) -> AsyncIterator[str]:
+        """从 OpenAI 流式响应中提取纯文本片段。"""
+        try:
+            async for chunk in response_stream:
+                if not getattr(chunk, "choices", None):
+                    continue
+                delta = getattr(chunk.choices[0], "delta", None)
+                content = getattr(delta, "content", None)
+                if content:
+                    yield content
+        except Exception as e:
+            logger.info(f"读取OpenAI流式响应发生错误: {str(e)}")
+            raise ServerRequestsError("调用OpenAI客户端向LLM发起请求出错") from e
 
 
 if __name__ == "__main__":

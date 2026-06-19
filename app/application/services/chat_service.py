@@ -52,18 +52,19 @@ class ChatService:
                 )
                 await uow.session.add_event(session_id, user_event)
 
-            response = await self._llm.invoke(messages)
-            assistant_message = str(response.get("content") or "")
-            assistant_event = MessageEvent(
-                role="assistant",
-                message=assistant_message,
-            )
+            assistant_chunks: list[str] = []
+            response_stream = self._llm.stream(messages)
+            async for chunk in response_stream:
+                assistant_chunks.append(chunk)
+                yield MessageEvent(role="assistant", message=chunk)
+
+            assistant_message = "".join(assistant_chunks)
+            assistant_event = MessageEvent(role="assistant", message=assistant_message)
             done_event = DoneEvent()
             async with self._uow_factory() as uow:
                 await uow.session.add_event(session_id, assistant_event)
                 await uow.session.add_event(session_id, done_event)
 
-            yield assistant_event
             yield done_event
         except Exception as e:
             logger.error("普通聊天会话[%s]对话出错: %s", session_id, e)

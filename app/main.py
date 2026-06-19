@@ -132,7 +132,11 @@ app = FastAPI(
 # 5.配置CROS中间件，解决跨域问题
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "wails://localhost:9245",
+        "http://localhost:9245",
+        "https://localhost:9245",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
