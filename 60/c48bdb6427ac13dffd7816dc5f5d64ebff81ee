@@ -1,0 +1,41 @@
+app/interfaces/endpoints/session_routes.py
+  s_e16b8b24fb0f54::t_a90854fac553ca 73-74,88-89
+  s_e16b8b24fb0f54::t_06e1281728008f 93-115,176-177,180
+AGENTS.md
+  s_ef4da30c4e237e::t_84679f24848097 4
+CLAUDE.md
+  s_ef4da30c4e237e::t_84679f24848097 4
+app/interfaces/schemas/session.py
+  s_e16b8b24fb0f54::t_bfca68ac93c59e 48-49
+  s_e16b8b24fb0f54::t_76c3652edd26a7 81-82
+tests/test_session_api.py
+  s_e16b8b24fb0f54::t_88427a2c6296bf 1,76-77,87-88,99-100,115-116,433-434
+  s_e16b8b24fb0f54::t_feb46bb27e977b 306-307,319-320,330-331
+  s_e16b8b24fb0f54::t_d7800f507643ef 162-163,165-166,323-329,332-348
+app/application/services/session_service.py
+  s_e16b8b24fb0f54::t_343b385be797e8 123-129,132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "60c48bdb6427ac13dffd7816dc5f5d64ebff81ee",
+  "prompts": {},
+  "sessions": {
+    "s_e16b8b24fb0f54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ed9cd-8a68-79a3-8b1c-3755f689c395",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    },
+    "s_ef4da30c4e237e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ee029-4cec-7c51-acd7-9c4d18c8af59",
+        "model": "gpt-5.4"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
