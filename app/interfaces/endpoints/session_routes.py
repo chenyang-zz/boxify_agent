@@ -12,17 +12,23 @@ from datetime import datetime
 from typing import AsyncGenerator, Dict, Optional
 
 import websockets
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from sse_starlette import EventSourceResponse, ServerSentEvent
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from app.application.errors.exceptions import NotFoundError
+from app.application.errors.exceptions import BadRequestError, NotFoundError
 from app.application.services.agent_service import AgentService
+from app.application.services.chat_service import ChatService
 from app.application.services.session_service import SessionService
+from app.domain.models.session import SessionType
 from app.interfaces.schemas import Response
 from app.interfaces.schemas.event import EventMapper
 from app.interfaces.schemas.session import (
     ChatRequest,
+    CreateSessionProjectRequest,
+    CreateSessionRequest,
+    SessionProjectRequest,
+    SessionProjectResponse,
     CreateSessionResponse,
     FileReadRequest,
     FileReadResponse,
@@ -30,10 +36,17 @@ from app.interfaces.schemas.session import (
     GetSessionResponse,
     ListSessionItem,
     ListSessionResponse,
+    SidebarProjectItem,
     ShellReadRequest,
     ShellReadResponse,
+    SessionSidebarResponse,
+    UpdateSessionRequest,
 )
-from app.interfaces.service_dependencies import get_agent_service, get_session_service
+from app.interfaces.service_dependencies import (
+    get_agent_service,
+    get_chat_service,
+    get_session_service,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["会话模块"])
@@ -43,6 +56,36 @@ router = APIRouter(prefix="/sessions", tags=["会话模块"])
 SESSION_SLEEP_INTERVAL = 5
 
 
+def to_list_session_item(session) -> ListSessionItem:
+    """将会话领域对象转换为列表条目。"""
+    session_type = (
+        session.type if isinstance(session.type, SessionType) else SessionType(session.type)
+    )
+    data = {
+        "session_id": session.id,
+        "title": session.title,
+        "latest_message": session.latest_message,
+        "latest_message_at": session.latest_message_at,
+        "status": session.status,
+        "type": session_type,
+        "project_id": session.project_id,
+        "is_pinned": session.is_pinned,
+    }
+    if session_type != SessionType.CHAT:
+        data["unread_message_count"] = session.unread_message_count
+    return ListSessionItem(**data)
+
+
+def to_project_response(project) -> SessionProjectResponse:
+    """将项目领域对象转换为响应结构。"""
+    return SessionProjectResponse(
+        project_id=project.id,
+        name=project.name,
+        sort_order=project.sort_order,
+        is_pinned=project.is_pinned,
+    )
+
+
 @router.post(
     path="",
     summary="创建新任务会话",
@@ -50,14 +93,22 @@ SESSION_SLEEP_INTERVAL = 5
     response_model=Response[CreateSessionResponse],
 )
 async def create_session(
+    request: CreateSessionRequest = Body(default_factory=CreateSessionRequest),
     session_service: SessionService = Depends(get_session_service),
 ):
     """创建一个空白的新任务会话"""
-    session = await session_service.create_session()
+    session = await session_service.create_session(
+        session_type=request.type.value,
+        project_id=request.project_id,
+        is_pinned=request.is_pinned,
+    )
     return Response.success(
         msg="创建任务会话成功",
         data=CreateSessionResponse(
             session_id=session.id,
+            type=session.type,
+            project_id=session.project_id,
+            is_pinned=session.is_pinned,
         ),
     )
 
@@ -67,27 +118,127 @@ async def create_session(
     summary="获取会话列表基础信息",
     description="获取Boxify项目中所有任务会话基础信息列表",
     response_model=Response[ListSessionResponse],
+    response_model_exclude_unset=True,
 )
 async def get_all_sessions(
     session_service: SessionService = Depends(get_session_service),
 ):
     """获取Boxify项目中所有任务会话基础信息列表"""
     sessions = await session_service.get_all_sessions()
-    session_items = [
-        ListSessionItem(
-            session_id=session.id,
-            title=session.title,
-            latest_message=session.latest_message,
-            latest_message_at=session.latest_message_at,
-            status=session.status,
-            unread_message_count=session.unread_message_count,
-        )
-        for session in sessions
-    ]
+    session_items = [to_list_session_item(session) for session in sessions]
     return Response.success(
         msg="获取任务会话列表成功",
         data=ListSessionResponse(sessions=session_items),
     )
+
+
+@router.get(
+    path="/sidebar",
+    summary="获取侧边栏会话项目结构",
+    description="获取项目、项目下会话和独立会话的组合结构",
+    response_model=Response[SessionSidebarResponse],
+    response_model_exclude_unset=True,
+)
+async def get_sidebar(
+    session_service: SessionService = Depends(get_session_service),
+):
+    """获取侧边栏组合结构"""
+    sidebar = await session_service.get_sidebar()
+    return Response.success(
+        msg="获取侧边栏会话列表成功",
+        data=SessionSidebarResponse(
+            projects=[
+                SidebarProjectItem(
+                    **to_project_response(item.project).model_dump(),
+                    sessions=[to_list_session_item(session) for session in item.sessions],
+                )
+                for item in sidebar.projects
+            ],
+            standalone_conversations=[
+                to_list_session_item(session)
+                for session in sidebar.standalone_conversations
+            ],
+        ),
+    )
+
+
+@router.post(
+    path="/projects",
+    summary="创建会话项目",
+    description="创建当前用户的会话项目",
+    response_model=Response[SessionProjectResponse],
+)
+async def create_project(
+    request: CreateSessionProjectRequest,
+    session_service: SessionService = Depends(get_session_service),
+):
+    """创建会话项目"""
+    project = await session_service.create_project(
+        name=request.name,
+        sort_order=request.sort_order,
+        is_pinned=request.is_pinned,
+    )
+    return Response.success(msg="创建会话项目成功", data=to_project_response(project))
+
+
+@router.post(
+    path="/projects/{project_id}/update",
+    summary="更新会话项目",
+    description="更新当前用户的会话项目名称或排序",
+    response_model=Response[SessionProjectResponse],
+)
+async def update_project(
+    project_id: str,
+    request: SessionProjectRequest,
+    session_service: SessionService = Depends(get_session_service),
+):
+    """更新会话项目"""
+    project = await session_service.update_project(
+        project_id=project_id,
+        name=request.name,
+        sort_order=request.sort_order,
+        is_pinned=request.is_pinned,
+    )
+    return Response.success(msg="更新会话项目成功", data=to_project_response(project))
+
+
+@router.post(
+    path="/projects/{project_id}/delete",
+    summary="删除会话项目",
+    description="删除当前用户的会话项目及项目下会话",
+    response_model=Response[Optional[Dict]],
+)
+async def delete_project(
+    project_id: str,
+    session_service: SessionService = Depends(get_session_service),
+):
+    """删除会话项目及项目下会话"""
+    await session_service.delete_project(project_id)
+    return Response.success(msg="删除会话项目成功")
+
+
+@router.post(
+    path="/{session_id}/update",
+    summary="更新指定会话",
+    description="更新会话标题或移动到指定项目，project_id为空表示独立会话",
+    response_model=Response[ListSessionItem],
+    response_model_exclude_unset=True,
+)
+async def update_session(
+    session_id: str,
+    request: UpdateSessionRequest,
+    session_service: SessionService = Depends(get_session_service),
+):
+    """更新会话标题或项目归属"""
+    update_kwargs = {}
+    if request.title is not None:
+        update_kwargs["title"] = request.title
+    if "project_id" in request.model_fields_set:
+        update_kwargs["project_id"] = request.project_id
+    if "is_pinned" in request.model_fields_set:
+        update_kwargs["is_pinned"] = request.is_pinned
+    session = await session_service.update_session(session_id, **update_kwargs)
+    return Response.success(msg="更新会话成功", data=to_list_session_item(session))
 
 
 @router.post(
@@ -128,22 +279,34 @@ async def delete_session(
 async def chat(
     session_id: str,
     request: ChatRequest,
+    session_service: SessionService = Depends(get_session_service),
+    chat_service: ChatService = Depends(get_chat_service),
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """根据传递的会话id和chat请求数据向指定会话发起聊天请求"""
+    session = await session_service.get_session(session_id)
+    if not session:
+        raise NotFoundError("该会话不存在")
+    session_type = (
+        session.type if isinstance(session.type, SessionType) else SessionType(session.type)
+    )
+    if session_type == SessionType.CHAT and request.attachments:
+        raise BadRequestError("普通聊天会话暂不支持附件")
 
     async def event_generator() -> AsyncGenerator[ServerSentEvent, None]:
         """定义事件生成器，用于配合EventSourceResponse生成流式响应数据"""
-        # 调用Agent服务发起聊天
-        async for event in agent_service.chat(
-            session_id=session_id,
-            message=request.message,
-            attachments=request.attachments,
-            latest_event_id=request.event_id,
-            timestamp=datetime.fromtimestamp(request.timestamp)
+        service = chat_service if session_type == SessionType.CHAT else agent_service
+        chat_kwargs = {
+            "session_id": session_id,
+            "message": request.message,
+            "latest_event_id": request.event_id,
+            "timestamp": datetime.fromtimestamp(request.timestamp)
             if request.timestamp
             else None,
-        ):
+        }
+        if session_type == SessionType.TASK:
+            chat_kwargs["attachments"] = request.attachments
+        async for event in service.chat(**chat_kwargs):
             # 将Agent事件转换为see数据(因为普通的event没法通过流式事件传输)
             sse_event = EventMapper.event_to_sse_event(event)
             if sse_event:
@@ -196,22 +359,14 @@ async def stream_sessions(
 
         while True:
             sessions = await session_service.get_all_sessions()
-            session_items = [
-                ListSessionItem(
-                    session_id=session.id,
-                    title=session.title,
-                    latest_message=session.latest_message,
-                    latest_message_at=session.latest_message_at,
-                    status=session.status,
-                    unread_message_count=session.unread_message_count,
-                )
-                for session in sessions
-            ]
+            session_items = [to_list_session_item(session) for session in sessions]
 
             # 将会话列表转换为流式事件数据并返回
             yield ServerSentEvent(
                 event="sessions",
-                data=ListSessionResponse(sessions=session_items).model_dump_json(),
+                data=ListSessionResponse(sessions=session_items).model_dump_json(
+                    exclude_unset=True
+                ),
             )
 
             # 睡眠指定事件避免高频响应

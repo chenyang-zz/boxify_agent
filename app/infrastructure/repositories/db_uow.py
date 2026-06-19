@@ -20,6 +20,9 @@ from app.infrastructure.repositories.db_document_repository import DBDocumentRep
 from app.infrastructure.repositories.db_file_repository import DBFileRepository
 from app.infrastructure.repositories.db_memory_repository import DBMemoryRepository
 from app.infrastructure.repositories.db_session_repository import DBSessionRepository
+from app.infrastructure.repositories.db_session_project_repository import (
+    DBSessionProjectRepository,
+)
 from app.infrastructure.repositories.db_tag_repository import DBTagRepository
 from app.infrastructure.repositories.db_user_repository import DBUserRepository
 from core.config import get_settings
@@ -111,6 +114,7 @@ class DBUnitOfWork(IUnitOfWork):
         self.tag = DBTagRepository(db_session=db_session)
         self.file = DBFileRepository(db_session=db_session)
         self.session = DBSessionRepository(db_session=db_session)
+        self.session_project = DBSessionProjectRepository(db_session=db_session)
         self.user = DBUserRepository(db_session=db_session)
         self.memory = DBMemoryRepository(db_session=db_session)
 

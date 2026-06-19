@@ -4,9 +4,11 @@ import pytest
 
 from app.application.services.agent_service import AgentService
 from app.application.services.auth_service import AuthService
+from app.application.services.chat_service import ChatService
 from app.domain.models.app_config import A2AConfig, AgentConfig, MCPConfig
+from app.domain.models.event import DoneEvent, ErrorEvent, MessageEvent
 from app.domain.models.long_term_memory import MemorySource
-from app.domain.models.session import Session, SessionStatus
+from app.domain.models.session import Session, SessionStatus, SessionType
 from app.domain.models.user import User
 from app.infrastructure.repositories.db_uow import DBUnitOfWork
 
@@ -21,6 +23,7 @@ async def test_db_uow_clears_session_after_successful_commit():
         assert uow.app_config.db_session is db_session
         assert uow.file.db_session is db_session
         assert uow.session.db_session is db_session
+        assert uow.session_project.db_session is db_session
         assert uow.user.db_session is db_session
 
     assert db_session.commits == 1
@@ -120,7 +123,12 @@ async def test_auth_service_creates_fresh_uow_for_each_operation():
 @pytest.mark.anyio
 async def test_agent_service_persists_user_message_in_single_transaction():
     session_repository = InMemorySessionRepository()
-    session = Session(id="session-1", title="对话", status=SessionStatus.PENDING)
+    session = Session(
+        id="session-1",
+        title="对话",
+        status=SessionStatus.PENDING,
+        type=SessionType.TASK,
+    )
     session_repository.sessions[session.id] = session
     uow_factory = TrackingUowFactory(session_repository=session_repository)
     task_cls = RecordingTask
@@ -151,7 +159,12 @@ async def test_agent_service_persists_user_message_in_single_transaction():
 @pytest.mark.anyio
 async def test_agent_service_remembers_user_message_when_memory_is_configured():
     session_repository = InMemorySessionRepository()
-    session = Session(id="session-1", title="对话", status=SessionStatus.PENDING)
+    session = Session(
+        id="session-1",
+        title="对话",
+        status=SessionStatus.PENDING,
+        type=SessionType.TASK,
+    )
     session_repository.sessions[session.id] = session
     uow_factory = TrackingUowFactory(session_repository=session_repository)
     memory = FakeLongTermMemoryManager()
@@ -175,6 +188,69 @@ async def test_agent_service_remembers_user_message_when_memory_is_configured():
         pass
 
     assert memory.remembered == [("hello memory", MemorySource.SESSION, "session-1")]
+
+
+@pytest.mark.anyio
+async def test_agent_service_rejects_chat_session_without_creating_task():
+    session_repository = InMemorySessionRepository()
+    session = Session(
+        id="chat-1",
+        title="普通聊天",
+        status=SessionStatus.PENDING,
+        type=SessionType.CHAT,
+    )
+    session_repository.sessions[session.id] = session
+    uow_factory = TrackingUowFactory(session_repository=session_repository)
+    task_cls = RecordingTask
+    task_cls.created_tasks = []
+    service = AgentService(
+        uow_factory=uow_factory,
+        llm=object(),
+        agent_config=AgentConfig(),
+        mcp_config=MCPConfig(),
+        a2a_config=A2AConfig(),
+        sandbox_cls=FakeSandbox,
+        task_cls=task_cls,
+        json_parser=object(),
+        search_engine=object(),
+        file_storage=object(),
+    )
+
+    events = [event async for event in service.chat(session_id=session.id, message="hi")]
+
+    assert isinstance(events[0], ErrorEvent)
+    assert "不是任务会话" in events[0].error
+    assert task_cls.created_tasks == []
+
+
+@pytest.mark.anyio
+async def test_chat_service_persists_user_and_assistant_messages():
+    session_repository = InMemorySessionRepository()
+    session = Session(
+        id="chat-1",
+        title="普通聊天",
+        status=SessionStatus.PENDING,
+        type=SessionType.CHAT,
+        user_id="user-a",
+    )
+    session_repository.sessions[session.id] = session
+    uow_factory = TrackingUowFactory(session_repository=session_repository)
+    llm = FakeLLM(content="plain response")
+    service = ChatService(uow_factory=uow_factory, llm=llm, user_id="user-a")
+
+    events = [event async for event in service.chat(session.id, message="hello")]
+
+    assert isinstance(events[0], MessageEvent)
+    assert events[0].message == "plain response"
+    assert isinstance(events[1], DoneEvent)
+    assert llm.messages == [[{"role": "user", "content": "hello"}]]
+    added_events = [
+        event for uow in uow_factory.created_uows for _, event in uow.session.added_events
+    ]
+    assert [event.message for event in added_events if isinstance(event, MessageEvent)] == [
+        "hello",
+        "plain response",
+    ]
 
 
 class FakeDBSession:
@@ -266,6 +342,12 @@ class InMemorySessionRepository:
     async def get_by_id(self, session_id: str):
         return self.sessions.get(session_id)
 
+    async def get_by_id_for_user(self, session_id: str, user_id: str):
+        session = self.sessions.get(session_id)
+        if session and session.user_id == user_id:
+            return session
+        return None
+
     async def save(self, session: Session):
         self.sessions[session.id] = session
 
@@ -343,3 +425,13 @@ class FakeLongTermMemoryManager:
 
     async def remember_text(self, content: str, source, source_session_id=None):
         self.remembered.append((content, source, source_session_id))
+
+
+class FakeLLM:
+    def __init__(self, content: str):
+        self.content = content
+        self.messages = []
+
+    async def invoke(self, messages, tools=None, response_format=None, tool_choice=None):
+        self.messages.append(messages)
+        return {"role": "assistant", "content": self.content}

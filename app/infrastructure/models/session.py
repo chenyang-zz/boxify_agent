@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import Any, Dict, List, Self
 from uuid import uuid4
-from sqlalchemy import DateTime, Integer, PrimaryKeyConstraint, String, text, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKeyConstraint,
+    Integer,
+    PrimaryKeyConstraint,
+    String,
+    text,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,11 +22,34 @@ class SessionModel(Base):
     """会话ORM模型"""
 
     __tablename__ = "sessions"
-    __table_args__ = (PrimaryKeyConstraint("id", name="kp_sessions_id"),)
+    __table_args__ = (
+        PrimaryKeyConstraint("id", name="kp_sessions_id"),
+        ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_sessions_user_id", ondelete="CASCADE"
+        ),
+        ForeignKeyConstraint(
+            ["project_id"],
+            ["session_projects.id"],
+            name="fk_sessions_project_id",
+            ondelete="CASCADE",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         String(255), nullable=False, primary_key=True, default=lambda: str(uuid4())
     )  # 会话id
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    project_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    type: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text("'task'::character varying")
+    )
+    is_pinned: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+    )
     sandbox_id: Mapped[str] = mapped_column(String(255), nullable=True)  # 沙箱id
     task_id: Mapped[str] = mapped_column(String(255), nullable=True)  # 任务id
     title: Mapped[str] = mapped_column(
@@ -69,7 +101,7 @@ class SessionModel(Base):
             # 复杂字段: 使用BaseModel提供的json字典转换格式
             **session.model_dump(
                 mode="json",
-                include={"moemories", "files", "events"},
+                include={"memories", "files", "events"},
             ),
         )
 
@@ -88,7 +120,7 @@ class SessionModel(Base):
         # 复杂字段: 使用BaseModel提供的json字典转换格式
         json_data = session.model_dump(
             mode="json",
-            include={"moemories", "files", "events"},
+            include={"memories", "files", "events"},
         )
 
         # 合并更新

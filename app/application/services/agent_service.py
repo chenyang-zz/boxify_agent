@@ -30,7 +30,7 @@ from app.domain.models.event import (
 )
 from app.domain.models.file import File
 from app.domain.models.long_term_memory import MemorySource
-from app.domain.models.session import Session, SessionStatus
+from app.domain.models.session import Session, SessionStatus, SessionType
 from app.domain.repositories.vow import IUnitOfWork
 from app.domain.services.memory import LongTermMemoryManager, MemoryActiveRecall
 
@@ -54,6 +54,7 @@ class AgentService:
         file_storage: FileStorage,
         memory: LongTermMemoryManager | None = None,
         active_recall: MemoryActiveRecall | None = None,
+        user_id: str = "",
     ) -> None:
         """构造函数，完成Agent服务的初始化"""
         self._uow_factory = uow_factory
@@ -68,6 +69,7 @@ class AgentService:
         self._file_storage = file_storage
         self._memory = memory
         self._active_recall = active_recall
+        self._user_id = user_id
         logger.info("AgentService初始化成功")
 
     async def _get_task(self, session: Session) -> Optional[Task]:
@@ -171,6 +173,12 @@ class AgentService:
             if not session:
                 logger.error(f"尝试与不存在的任务会话[{session_id}]对话")
                 raise RuntimeError("任务会话不存在")
+            if self._user_id and session.user_id != self._user_id:
+                logger.error(f"尝试访问不属于当前用户的任务会话[{session_id}]")
+                raise RuntimeError("任务会话不存在")
+            if session.type != SessionType.TASK:
+                logger.error(f"尝试使用Agent服务处理非任务会话[{session_id}]")
+                raise RuntimeError("该会话不是任务会话")
 
             # 获取对应会话任务
             task = await self._get_task(session)
