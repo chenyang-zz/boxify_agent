@@ -1,0 +1,47 @@
+app/application/services/chat_service.py
+  s_e16b8b24fb0f54::t_b0334b01fb94b5 56
+  s_e16b8b24fb0f54::t_3a804b7b3d9935 55,57-62
+app/domain/external/llm.py
+  s_e16b8b24fb0f54::t_83755d8ff08c2c 3-4,16,21-23
+  s_e16b8b24fb0f54::t_0fe380f15a5eae 1,20,24
+app/main.py
+  h_e1f1392360ad67 136-138
+app/infrastructure/external/llm/openai_llm.py
+  s_e16b8b24fb0f54::t_83755d8ff08c2c 2,13,99-100,127-142
+  s_e16b8b24fb0f54::t_6d9be9f298b191 55-56,105-126
+tests/test_auth_api.py
+  s_e16b8b24fb0f54::t_b8bdcd8b6d976b 46-77
+app/interfaces/schemas/auth.py
+  s_e16b8b24fb0f54::t_409646fc111b3e 1-2,18-20,23-24
+tests/test_openai_llm_streaming.py
+  s_e16b8b24fb0f54::t_7c7163bbde3ddd 11-27,79-91
+  s_e16b8b24fb0f54::t_8803deab96483b 28,42,58
+  s_e16b8b24fb0f54::t_80ebeb9cd8a9b7 1-10,29-41,43-57,59-78,92-102
+tests/test_uow_transactions.py
+  s_e16b8b24fb0f54::t_8e2a91ba97f529 256-277,279-288,475-479,487-488
+  s_e16b8b24fb0f54::t_765862b8d1944d 278,472-473,480-486
+  s_e16b8b24fb0f54::t_d133d9969e7dbc 471,474
+app/interfaces/endpoints/auth_routes.py
+  s_e16b8b24fb0f54::t_ac009e10561da4 31-33,36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "69fbf18ad62b35dece5447be5a9a96b20c4543b1",
+  "prompts": {},
+  "humans": {
+    "h_e1f1392360ad67": {
+      "author": "chenyang <904852749@qq.com>"
+    }
+  },
+  "sessions": {
+    "s_e16b8b24fb0f54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ed9cd-8a68-79a3-8b1c-3755f689c395",
+        "model": "gpt-5.5"
+      },
+      "human_author": "chenyang <904852749@qq.com>"
+    }
+  }
+}
