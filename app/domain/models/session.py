@@ -20,10 +20,21 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"  # 已完成
 
 
+class SessionType(str, Enum):
+    """会话业务类型枚举"""
+
+    TASK = "task"  # Agent/沙箱任务会话
+    CHAT = "chat"  # 普通聊天会话
+
+
 class Session(BaseModel):
     """会话领域模型"""
 
     id: str = Field(default_factory=lambda: str(uuid4()))  # 会话id
+    user_id: str = ""  # 所属用户id
+    project_id: Optional[str] = None  # 所属项目id，空表示独立会话
+    type: SessionType = SessionType.CHAT  # 会话类型
+    is_pinned: bool = False  # 是否置顶
     sandbox_id: Optional[str] = None  # 沙箱id
     task_id: Optional[str] = None  # 任务id
     title: str = ""  # 标题

@@ -12,6 +12,7 @@ from app.application.services.app_config_bootstrap_service import (
 )
 from app.application.services.app_config_service import AppConfigService
 from app.application.services.auth_service import AuthService
+from app.application.services.chat_service import ChatService
 from app.application.services.document_service import DocumentService
 from app.application.services.file_service import FileService
 from app.application.services.memory_service import MemoryService
@@ -255,8 +256,14 @@ async def get_memory_service(
     )
 
 
-def get_session_service() -> SessionService:
-    return SessionService(uow_factory=get_uow, sandbox_cls=DockerSandbox)
+def get_session_service(
+    current_user: User = Depends(require_active_user),
+) -> SessionService:
+    return SessionService(
+        uow_factory=get_uow,
+        sandbox_cls=DockerSandbox,
+        user_id=current_user.id,
+    )
 
 
 def get_agent_task_service() -> AgentTaskService:
@@ -312,6 +319,21 @@ async def get_agent_service(
             embedding=memory_graph[1],
         ),
         active_recall=active_recall,
+        user_id=current_user.id,
+    )
+
+
+async def get_chat_service(
+    current_user: User = Depends(require_active_user),
+) -> ChatService:
+    """获取普通聊天服务。"""
+    app_config = await AppConfigService(
+        uow_factory=get_uow, user_id=current_user.id
+    ).get_app_config()
+    return ChatService(
+        uow_factory=get_uow,
+        llm=OpenAILLM(app_config.llm_config),
+        user_id=current_user.id,
     )
 
 

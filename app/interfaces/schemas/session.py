@@ -12,7 +12,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from app.domain.models.file import File
-from app.domain.models.session import SessionStatus
+from app.domain.models.session import SessionStatus, SessionType
 from app.interfaces.schemas.event import AgentSSEEvent
 
 
@@ -20,6 +20,17 @@ class CreateSessionResponse(BaseModel):
     """创建会话响应结构"""
 
     session_id: str  # 会话id
+    type: SessionType
+    project_id: str | None = None
+    is_pinned: bool = False
+
+
+class CreateSessionRequest(BaseModel):
+    """创建会话请求结构"""
+
+    type: SessionType = SessionType.CHAT
+    project_id: str | None = None
+    is_pinned: bool = False
 
 
 class ListSessionItem(BaseModel):
@@ -28,15 +39,64 @@ class ListSessionItem(BaseModel):
     session_id: str = ""
     title: str = ""
     latest_message: str = ""
-    latest_message_at: Optional[datetime] = Field(default_factory=datetime.now)
+    latest_message_at: Optional[datetime] = None
     status: SessionStatus = SessionStatus.PENDING
-    unread_message_count: int = 0
+    unread_message_count: int | None = None
+    type: SessionType = SessionType.CHAT
+    project_id: str | None = None
+    is_pinned: bool = False
 
 
 class ListSessionResponse(BaseModel):
     """获取会话列表基础信息响应结构"""
 
     sessions: List[ListSessionItem]
+
+
+class SessionProjectRequest(BaseModel):
+    """创建或更新会话项目请求结构"""
+
+    name: str | None = None
+    sort_order: int | None = None
+    is_pinned: bool | None = None
+
+
+class CreateSessionProjectRequest(BaseModel):
+    """创建会话项目请求结构"""
+
+    name: str
+    sort_order: int = 0
+    is_pinned: bool = False
+
+
+class SessionProjectResponse(BaseModel):
+    """会话项目响应结构"""
+
+    project_id: str
+    name: str
+    sort_order: int
+    is_pinned: bool = False
+
+
+class SidebarProjectItem(SessionProjectResponse):
+    """侧边栏项目条目"""
+
+    sessions: List[ListSessionItem] = Field(default_factory=list)
+
+
+class SessionSidebarResponse(BaseModel):
+    """侧边栏组合响应结构"""
+
+    projects: List[SidebarProjectItem] = Field(default_factory=list)
+    standalone_conversations: List[ListSessionItem] = Field(default_factory=list)
+
+
+class UpdateSessionRequest(BaseModel):
+    """更新会话请求结构"""
+
+    title: str | None = None
+    project_id: str | None = None
+    is_pinned: bool | None = None
 
 
 class ChatRequest(BaseModel):
